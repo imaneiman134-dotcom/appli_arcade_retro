@@ -1,0 +1,25 @@
+# ===== FRONTEND =====
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# ===== BACKEND =====
+backend/target/
+backend/.env
+*.class
+*.jar
+*.war
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
