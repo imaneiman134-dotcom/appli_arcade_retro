@@ -1,0 +1,404 @@
+/* Style Arcade Rétro - Itération 3 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Courier New', monospace;
+  background-color: #000;
+  color: #00ff00;
+  line-height: 1.6;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  border: 5px solid #333;
+  margin: 10px;
+}
+
+.app-header {
+  background-color: #111;
+  border-bottom: 3px solid #00ff00;
+  padding: 20px;
+  text-align: center;
+}
+
+.app-header h1 {
+  font-size: 3em;
+  color: #ffff00;
+  text-shadow: 3px 3px 0px #ff00ff, 6px 6px 0px #0000ff;
+  margin-bottom: 15px;
+}
+
+.app-header nav {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+}
+
+.app-header nav a {
+  color: #00ff00;
+  text-decoration: none;
+  padding: 10px 20px;
+  border: 2px solid #00ff00;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.app-header nav a:hover {
+  background-color: #00ff00;
+  color: #000;
+  box-shadow: 0 0 15px #00ff00;
+}
+
+.app-main {
+  flex: 1;
+  padding: 40px;
+}
+
+.home-page h1 {
+  text-align: center;
+  margin-bottom: 40px;
+  color: #ff00ff;
+  text-transform: uppercase;
+}
+
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.game-card {
+  background-color: #111;
+  border: 4px solid #00ff00;
+  padding: 20px;
+  text-align: center;
+  position: relative;
+}
+
+.game-card:hover {
+  border-color: #ffff00;
+  box-shadow: 0 0 20px #ffff00;
+}
+
+.game-card img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border: 2px solid #00ff00;
+  margin-bottom: 15px;
+}
+
+.game-card h3 {
+  color: #ffff00;
+  font-size: 1.5em;
+  margin-bottom: 10px;
+}
+
+.game-card p {
+  font-size: 0.9em;
+  margin-bottom: 20px;
+  height: 50px;
+  overflow: hidden;
+}
+
+.leaderboard {
+  background-color: #222;
+  padding: 10px;
+  margin-bottom: 20px;
+  border: 1px dashed #00ff00;
+  text-align: left;
+}
+
+.leaderboard h4 {
+  color: #ff00ff;
+  font-size: 0.9em;
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.leaderboard ul {
+  list-style: none;
+  font-size: 0.8em;
+}
+
+.leaderboard li {
+  border-bottom: 1px solid #333;
+  padding: 2px 0;
+}
+
+.game-card button {
+  width: 100%;
+  background-color: #00ff00;
+  color: #000;
+  border: none;
+  padding: 15px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  font-size: 1.2em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.game-card button:hover {
+  background-color: #ffff00;
+  transform: scale(1.05);
+}
+
+.login-page {
+  max-width: 450px;
+  margin: 0 auto;
+  background-color: #111;
+  border: 4px solid #00ff00;
+  padding: 40px;
+}
+
+.login-page h1 {
+  color: #ffff00;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.login-page form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-page input {
+  background-color: #000;
+  border: 2px solid #00ff00;
+  padding: 12px;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+}
+
+.login-page button {
+  background-color: #00ff00;
+  color: #000;
+  border: none;
+  padding: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+}
+
+.login-page button:hover {
+  background-color: #ffff00;
+}
+
+.app-footer {
+  background-color: #111;
+  border-top: 3px solid #00ff00;
+  padding: 20px;
+  text-align: center;
+  font-size: 0.8em;
+}
+
+.loading {
+  text-align: center;
+  font-size: 2em;
+  margin-top: 100px;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* === REGISTER === */
+.success { color: #00ff00; margin-top: 10px; }
+.error { color: #ff0000; margin-top: 10px; }
+
+/* === NAV BUTTON === */
+.nav-btn {
+  background: transparent;
+  border: 2px solid #ff0000;
+  color: #ff0000;
+  padding: 10px 20px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.nav-btn:hover { background: #ff0000; color: #000; }
+
+/* === LEADERBOARD === */
+.leaderboard ul { list-style: none; font-size: 0.85em; }
+.leaderboard li { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #333; }
+.rank { color: #ff00ff; width: 30px; }
+.player { flex: 1; }
+.score-val { color: #ffff00; }
+.no-score { font-size: 0.8em; color: #555; text-align: center; }
+
+/* === GAME PAGE === */
+.game-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+.game-page h2 { color: #ffff00; font-size: 2em; }
+.game-hint { color: #aaa; font-size: 0.9em; }
+.game-canvas { border: 3px solid #00ff00; cursor: none; display: block; }
+.start-btn {
+  background: #00ff00; color: #000; border: none;
+  padding: 6px 16px; font-family: 'Courier New', monospace;
+  font-weight: bold; cursor: pointer; margin-left: 10px;
+}
+
+/* === GAME OVERLAY === */
+.game-overlay {
+  background: rgba(0,0,0,0.92);
+  border: 3px solid #ffff00;
+  padding: 30px 50px;
+  text-align: center;
+  display: flex; flex-direction: column; gap: 15px;
+}
+.game-overlay h3 { color: #ffff00; font-size: 1.8em; }
+.game-overlay p { color: #00ff00; }
+.game-overlay button {
+  background: #00ff00; color: #000; border: none;
+  padding: 12px 30px; font-family: 'Courier New', monospace;
+  font-weight: bold; font-size: 1em; cursor: pointer;
+}
+.game-overlay button:hover { background: #ffff00; }
+.hint { color: #ff7700 !important; font-size: 0.85em; }
+
+/* === TIC TAC TOE === */
+.ttt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  gap: 6px;
+}
+.ttt-cell {
+  width: 100px; height: 100px;
+  background: #111; border: 3px solid #00ff00;
+  font-size: 2.5em; font-family: 'Courier New', monospace;
+  font-weight: bold; cursor: pointer; color: #fff;
+  transition: all 0.1s;
+}
+.ttt-cell:hover { background: #1a1a1a; box-shadow: 0 0 10px #00ff00; }
+.ttt-x { color: #00ff00; }
+.ttt-o { color: #ff0000; }
+
+/* === BLOCK BLAST === */
+.bb-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 48px);
+  gap: 3px;
+}
+.bb-cell {
+  width: 48px; height: 48px;
+  border: 2px solid #222;
+  cursor: pointer; transition: all 0.1s;
+  border-radius: 4px;
+}
+.bb-cell:hover { transform: scale(1.1); }
+.bb-highlight { border-color: #fff !important; box-shadow: 0 0 8px #fff; transform: scale(1.08); }
+
+/* === MINESWEEPER === */
+.ms-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  gap: 2px;
+}
+.ms-cell {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: bold; font-size: 1em; cursor: pointer;
+  border-radius: 2px; user-select: none;
+}
+.ms-hidden {
+  background: #444; border: 2px outset #666;
+  transition: background 0.1s;
+}
+.ms-hidden:hover { background: #555; }
+.ms-revealed { background: #222; border: 1px solid #333; }
+.ms-mine { background: #660000 !important; }
+
+/* === FNAF === */
+.fnaf-container {
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 80vh; justify-content: center;
+  font-family: 'Courier New', monospace;
+}
+.fnaf-intro, .fnaf-overlay {
+  text-align: center; padding: 40px 60px;
+  border: 3px solid #ff6600; background: #0a0a0a;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.fnaf-intro h2, .fnaf-overlay h2 { color: #ff6600; font-size: 2em; }
+.fnaf-intro p, .fnaf-overlay p { color: #ccc; }
+.fnaf-warning { color: #ffff00 !important; }
+.fnaf-game { width: 640px; display: flex; flex-direction: column; gap: 10px; }
+.fnaf-hud {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #111; padding: 8px 16px; border: 2px solid #333;
+  color: #00ff00; font-size: 0.95em;
+}
+.fnaf-power-low { color: #ff0000 !important; animation: blink 0.5s infinite; }
+.fnaf-door-status { color: #ff7700; }
+.fnaf-alert { color: #ff0000; font-weight: bold; animation: blink 0.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.fnaf-flash {
+  background: #1a0000; border: 1px solid #ff0000;
+  color: #ff6666; padding: 6px 12px; text-align: center; font-size: 0.9em;
+}
+.fnaf-office {
+  background: #0d0d0d; border: 2px solid #222;
+  padding: 20px; display: flex; flex-direction: column; gap: 15px;
+  min-height: 300px; align-items: center; justify-content: space-between;
+}
+.fnaf-scene {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+}
+.fnaf-scene-text { color: #555; font-size: 1.1em; }
+.fnaf-door-shadow { color: #ff0000; font-size: 1.3em; animation: blink 0.6s infinite; }
+.fnaf-controls { display: flex; gap: 20px; }
+.fnaf-cameras { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.fnaf-cam-view {
+  background: #0a0a0a; border: 2px solid #00ff00;
+  width: 100%; padding: 10px; text-align: center;
+}
+.fnaf-cam-title { color: #00ff00; margin-bottom: 10px; }
+.fnaf-cam-screen {
+  background: #111; height: 160px; display: flex;
+  align-items: center; justify-content: center;
+  border: 1px solid #222;
+}
+.fnaf-mascot-spotted { color: #ff0000; font-size: 1.5em; animation: blink 0.5s infinite; }
+.fnaf-cam-empty { color: #333; }
+.fnaf-cam-list { display: flex; gap: 8px; }
+.fnaf-cam-btn {
+  background: #111; border: 2px solid #444; color: #aaa;
+  padding: 8px 14px; cursor: pointer; font-family: 'Courier New', monospace;
+}
+.fnaf-cam-btn:hover, .fnaf-cam-active { border-color: #00ff00; color: #00ff00; background: #0a1a0a; }
+.fnaf-btn {
+  background: #ff6600; color: #000; border: none;
+  padding: 12px 28px; font-family: 'Courier New', monospace;
+  font-weight: bold; font-size: 1em; cursor: pointer;
+}
+.fnaf-btn:hover { background: #ff8800; }
+.fnaf-btn-green { background: #00aa00; }
+.fnaf-btn-green:hover { background: #00ff00; }
+.fnaf-btn-red { background: #aa0000; color: #fff; }
+.fnaf-btn-red:hover { background: #ff0000; }
+.fnaf-btn-secondary {
+  background: transparent; border: 2px solid #666;
+  color: #666; padding: 10px 24px;
+  font-family: 'Courier New', monospace; cursor: pointer;
+}
+.fnaf-btn-secondary:hover { border-color: #aaa; color: #aaa; }
+.fnaf-dead h2 { color: #ff0000; }
+.fnaf-win h2 { color: #ffff00; }
