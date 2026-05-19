@@ -1,0 +1,128 @@
+.battleship-arena {
+  background-color: #0b132b;
+  color: #6fffe9;
+  font-family: 'Courier New', Courier, monospace;
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+
+.radar-header h1 {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  border-bottom: 2px solid #6fffe9;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.tactical-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(28, 37, 65, 0.8);
+  border: 1px solid #3a506b;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(111, 255, 233, 0.2);
+}
+
+.orientation-controls {
+  margin: 15px 0;
+}
+
+.btn-orientation {
+  background-color: transparent;
+  color: #6fffe9;
+  border: 1px solid #6fffe9;
+  padding: 8px 15px;
+  margin: 0 10px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: all 0.3s;
+}
+
+.btn-orientation.active, .btn-orientation:hover {
+  background-color: #6fffe9;
+  color: #0b132b;
+}
+
+.ocean-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 45px);
+  grid-template-rows: repeat(10, 45px);
+  gap: 2px;
+  background-color: #6fffe9;
+  border: 2px solid #6fffe9;
+  margin-top: 20px;
+}
+
+.ocean-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  color: transparent; /* Masque le texte interne car on gère tout en CSS */
+}
+
+/* Eau vide */
+.ocean-cell.water {
+  background-color: #1c2541;
+}
+.ocean-cell.water:hover {
+  background-color: #3a506b;
+}
+
+/* Brouillard de guerre (grille adverse) */
+.ocean-cell.water-unknown {
+  background-color: #101820;
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 2px, transparent 2px, transparent 4px);
+}
+.target-grid .ocean-cell.water-unknown:hover {
+  background-color: #e71d36;
+  opacity: 0.8;
+}
+
+/* Tirs */
+.ocean-cell.hit {
+  background-color: #e71d36;
+  animation: explode 0.4s ease-out;
+  cursor: not-allowed;
+}
+.ocean-cell.miss {
+  background-color: #3a506b;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@keyframes explode {
+  0% { transform: scale(1); background-color: white; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); background-color: #e71d36; }
+}
+
+/* Navires en acier avec bords arrondis continus */
+.ocean-cell.ship {
+  background: linear-gradient(145deg, #5c6a79, #344152);
+  border: 1px solid #222c38;
+  box-shadow: inset 0px 4px 8px rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+}
+.ocean-cell.ship.horizontal.head { border-top-left-radius: 20px; border-bottom-left-radius: 20px; border-right: none; }
+.ocean-cell.ship.horizontal.body { border-left: none; border-right: none; }
+.ocean-cell.ship.horizontal.tail { border-top-right-radius: 20px; border-bottom-right-radius: 20px; border-left: none; }
+.ocean-cell.ship.vertical.head { border-top-left-radius: 20px; border-top-right-radius: 20px; border-bottom: none; }
+.ocean-cell.ship.vertical.body { border-top: none; border-bottom: none; }
+.ocean-cell.ship.vertical.tail { border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; border-top: none; }
+
+.victory-screen {
+  text-align: center;
+  margin-top: 50px;
+  padding: 30px;
+  background: rgba(0, 255, 0, 0.1);
+  border: 2px solid #00ff00;
+  border-radius: 10px;
+}
