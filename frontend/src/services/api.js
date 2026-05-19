@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+// 1. On déclare la variable ici
+const currentHost = window.location.hostname;
+
+// 2. On l'utilise juste en dessous
+const API_BASE_URL = `http://${currentHost}:8080/api`;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -74,7 +78,7 @@ export const invitationService = {
     apiClient.post(`/invitations/decline/${invitationId}`),
 };
 
-// Services pour les Matchs (nouveau)
+// Services pour les Matchs
 export const matchService = {
   getMatch: (matchId) => 
     apiClient.get(`/matches/${matchId}`),

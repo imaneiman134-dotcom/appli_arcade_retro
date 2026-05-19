@@ -1,0 +1,48 @@
+.brawlbots-arena {
+  /* Remplacez l'image par une couleur sombre typique des bornes d'arcade */
+  background-color: #1a1a2e; 
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.battlefield {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-grow: 1;
+  padding: 0 10%;
+}
+
+.bot-sprite {
+  font-size: 100px; /* À enlever si vous utilisez des <img> */
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+/* Animation du bouclier */
+.shield-effect {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1.5);
+  opacity: 0.8;
+  animation: pulse-shield 1s infinite alternate;
+}
+
+/* Animation d'attaque (le bot avance vers le centre) */
+.bot-container.left.attacking .bot-sprite {
+  transform: translateX(150px);
+}
+.bot-container.right.attacking .bot-sprite {
+  transform: translateX(-150px);
+}
+
+/* Projection de feu */
+.fire-effect {
+  position: absolute;
+  top: 20px;
+  right: -80px; /* S'adapte selon la direction */
+  font-size: 60px;
+  animation: shoot-fire 0.5s ease-out forwards;
+}

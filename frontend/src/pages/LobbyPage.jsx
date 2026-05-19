@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jeuService, invitationService, matchService } from '../services/api';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 
 const LobbyPage = () => {
   const navigate = useNavigate();
@@ -19,33 +21,75 @@ const LobbyPage = () => {
   const userId = localStorage.getItem('userId');
   const userPseudo = localStorage.getItem('userPseudo');
 
-  useEffect(() => {
+ useEffect(() => {
     if (!userId) {
       navigate('/login');
       return;
     }
+    
     fetchData();
-    const interval = setInterval(fetchData, 5000); // Refresh every 5s
-    return () => clearInterval(interval);
+
+    // --- CONFIGURATION DYNAMIQUE DU WEBSOCKET ---
+    const currentHost = window.location.hostname;
+    const socketUrl = `http://${currentHost}:8080/ws-arcade`; 
+    const socket = new SockJS(socketUrl);
+    
+    // ... le reste du code StompClient
+
+    
+    const stompClient = new Client({
+      webSocketFactory: () => socket,
+      onConnect: () => {
+        console.log('🔌 Connecté au serveur d\'Arcade (WebSocket)');
+        
+        // On s'abonne à un canal unique pour cet utilisateur
+        stompClient.subscribe(`/topic/invitations/${userId}`, (message) => {
+          console.log('Notification reçue:', message.body);
+          // Dès qu'on reçoit le signal, on met à jour la liste et on affiche une alerte
+          fetchData();
+          setSuccessMessage("🔔 Nouvelle invitation reçue !");
+          setTimeout(() => setSuccessMessage(''), 4000);
+        });
+      },
+      onStompError: (frame) => {
+        console.error('Erreur STOMP:', frame.headers['message']);
+      }
+    });
+
+    stompClient.activate();
+
+    // Nettoyage à la fermeture de la page
+    return () => {
+      stompClient.deactivate();
+    };
   }, [userId]);
 
-  const fetchData = async () => {
+const fetchData = async () => {
+    // 1. Charger les jeux (Indépendant)
     try {
-      const [jeuxRes, receivedRes, sentRes] = await Promise.all([
-        jeuService.getAllJeux(),
-        invitationService.getReceivedInvitations(userId),
-        invitationService.getSentInvitations(userId)
-      ]);
+      const jeuxRes = await jeuService.getAllJeux();
       setJeux(jeuxRes.data || []);
-      setReceivedInvitations(receivedRes.data || []);
-      setSentInvitations(sentRes.data || []);
-      setError('');
     } catch (err) {
-      console.error('Erreur lors du chargement des données:', err);
-      // Don't show error for background refreshes
-    } finally {
-      setLoading(false);
+      console.error('Erreur chargement jeux:', err);
     }
+
+    // 2. Charger les invitations reçues
+    try {
+      const receivedRes = await invitationService.getReceivedInvitations(userId);
+      setReceivedInvitations(receivedRes.data || []);
+    } catch (err) {
+      console.error('Erreur chargement invitations reçues:', err);
+    }
+
+    // 3. Charger les invitations envoyées
+    try {
+      const sentRes = await invitationService.getSentInvitations(userId);
+      setSentInvitations(sentRes.data || []);
+    } catch (err) {
+      console.error('Erreur chargement invitations envoyées:', err);
+    }
+
+    setLoading(false);
   };
 
   const handleInviteSubmit = async (e) => {
@@ -104,6 +148,7 @@ const LobbyPage = () => {
 
   if (loading) return <div className="loading">Chargement du lobby...</div>;
 
+  // ... (Le reste du code de votre return() HTML/JSX reste strictement identique) ...
   return (
     <div className="lobby-page">
       <h1>🎮 Salon Multijoueur</h1>
@@ -112,6 +157,7 @@ const LobbyPage = () => {
       {successMessage && <div className="success-message">{successMessage}</div>}
 
       <div className="lobby-container">
+        {/* SECTION INVITATIONS REÇUES */}
         <div className="lobby-section">
           <h2>📬 Invitations reçues ({receivedInvitations.length})</h2>
           <div className="invitations-list">
@@ -134,6 +180,7 @@ const LobbyPage = () => {
           </div>
         </div>
 
+        {/* SECTION DÉFIER UN JOUEUR */}
         <div className="lobby-section">
           <h2>⚔️ Défier un joueur</h2>
           <form onSubmit={handleInviteSubmit} className="invite-form">
@@ -161,6 +208,7 @@ const LobbyPage = () => {
             <button type="submit" className="btn-primary">📤 Envoyer l'invitation</button>
           </form>
 
+          {/* SECTION INVITATIONS ENVOYÉES */}
           <h2 style={{marginTop: '30px'}}>📤 Invitations envoyées ({sentInvitations.length})</h2>
           <div className="invitations-list">
             {sentInvitations.length === 0 ? (
