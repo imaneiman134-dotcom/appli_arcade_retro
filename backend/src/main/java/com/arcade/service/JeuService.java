@@ -5,8 +5,8 @@ import com.arcade.model.Jeu;
 import com.arcade.repository.JeuRepository;
 import org.springframework.stereotype.Service;
 
-// NOUVEL IMPORT : Utilisez jakarta au lieu de javax
-import jakarta.annotation.PostConstruct; 
+
+import javax.annotation.PostConstruct; 
 import java.util.List;
 
 @Service

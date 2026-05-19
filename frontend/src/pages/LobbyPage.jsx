@@ -21,7 +21,7 @@ const LobbyPage = () => {
   const userId = localStorage.getItem('userId');
   const userPseudo = localStorage.getItem('userPseudo');
 
- useEffect(() => {
+  useEffect(() => {
     if (!userId) {
       navigate('/login');
       return;
@@ -29,23 +29,17 @@ const LobbyPage = () => {
     
     fetchData();
 
-    // --- CONFIGURATION DYNAMIQUE DU WEBSOCKET ---
     const currentHost = window.location.hostname;
     const socketUrl = `http://${currentHost}:8080/ws-arcade`; 
     const socket = new SockJS(socketUrl);
-    
-    // ... le reste du code StompClient
-
     
     const stompClient = new Client({
       webSocketFactory: () => socket,
       onConnect: () => {
         console.log('🔌 Connecté au serveur d\'Arcade (WebSocket)');
         
-        // On s'abonne à un canal unique pour cet utilisateur
         stompClient.subscribe(`/topic/invitations/${userId}`, (message) => {
           console.log('Notification reçue:', message.body);
-          // Dès qu'on reçoit le signal, on met à jour la liste et on affiche une alerte
           fetchData();
           setSuccessMessage("🔔 Nouvelle invitation reçue !");
           setTimeout(() => setSuccessMessage(''), 4000);
@@ -58,14 +52,12 @@ const LobbyPage = () => {
 
     stompClient.activate();
 
-    // Nettoyage à la fermeture de la page
     return () => {
       stompClient.deactivate();
     };
   }, [userId]);
 
-const fetchData = async () => {
-    // 1. Charger les jeux (Indépendant)
+  const fetchData = async () => {
     try {
       const jeuxRes = await jeuService.getAllJeux();
       setJeux(jeuxRes.data || []);
@@ -73,7 +65,6 @@ const fetchData = async () => {
       console.error('Erreur chargement jeux:', err);
     }
 
-    // 2. Charger les invitations reçues
     try {
       const receivedRes = await invitationService.getReceivedInvitations(userId);
       setReceivedInvitations(receivedRes.data || []);
@@ -81,7 +72,6 @@ const fetchData = async () => {
       console.error('Erreur chargement invitations reçues:', err);
     }
 
-    // 3. Charger les invitations envoyées
     try {
       const sentRes = await invitationService.getSentInvitations(userId);
       setSentInvitations(sentRes.data || []);
@@ -99,15 +89,32 @@ const fetchData = async () => {
       return;
     }
 
+    setError('');
     try {
       await invitationService.sendInvitation(userId, inviteForm.receiverPseudo, inviteForm.jeuId);
       setInviteForm({ receiverPseudo: '', jeuId: '' });
-      setSuccessMessage('Invitation envoyée avec succès !');
+      setSuccessMessage('✅ Invitation envoyée avec succès !');
       setTimeout(() => setSuccessMessage(''), 3000);
       fetchData();
-      setError('');
     } catch (err) {
-      setError('Impossible d\'envoyer l\'invitation. Vérifiez le pseudo.');
+      // On logge l'erreur complète dans la console pour enquêter
+      console.error("🔴 Erreur brute Axios :", err);
+      console.log("Données renvoyées par le backend :", err.response?.data);
+
+      const backendData = err.response?.data;
+      let errorMessage = 'Impossible d\'envoyer l\'invitation. Vérifiez le pseudo.';
+
+      // On analyse ce que le backend a vraiment répondu
+      if (!err.response) {
+        errorMessage = "Erreur réseau : le serveur est injoignable ou bloque la requête (CORS).";
+      } else if (typeof backendData === 'string' && backendData.length > 0) {
+        errorMessage = backendData;
+      } else if (backendData && typeof backendData === 'object' && backendData.message) {
+        // Si Spring renvoie un objet d'erreur standard
+        errorMessage = `Erreur serveur: ${backendData.message}`;
+      }
+
+      setError(errorMessage);
     }
   };
 
@@ -115,11 +122,13 @@ const fetchData = async () => {
     try {
       const res = await invitationService.acceptInvitation(invitationId);
       const match = res.data;
-      const jeu = jeux.find(j => j.id === match.jeu?.id);
-      const route = getGameRoute(jeu?.titre);
+      // Le match retourné contient jeu.id et jeu.titre
+      const jeuTitre = match.jeu?.titre;
+      const route = getGameRoute(jeuTitre);
       navigate(`/game/${route}/${match.jeu?.id}?matchId=${match.id}`);
     } catch (err) {
-      setError('Erreur lors de l\'acceptation');
+      const backendMessage = err.response?.data;
+      setError(typeof backendMessage === 'string' ? backendMessage : 'Erreur lors de l\'acceptation');
     }
   };
 
@@ -130,7 +139,8 @@ const fetchData = async () => {
       setSuccessMessage('Invitation refusée');
       setTimeout(() => setSuccessMessage(''), 2000);
     } catch (err) {
-      setError('Erreur lors du refus');
+      const backendMessage = err.response?.data;
+      setError(typeof backendMessage === 'string' ? backendMessage : 'Erreur lors du refus');
     }
   };
 
@@ -148,7 +158,6 @@ const fetchData = async () => {
 
   if (loading) return <div className="loading">Chargement du lobby...</div>;
 
-  // ... (Le reste du code de votre return() HTML/JSX reste strictement identique) ...
   return (
     <div className="lobby-page">
       <h1>🎮 Salon Multijoueur</h1>
@@ -167,7 +176,8 @@ const fetchData = async () => {
               receivedInvitations.map(inv => (
                 <div key={inv.id} className="invitation-card received">
                   <div className="invitation-info">
-                    <p><strong>{inv.sender?.pseudo}</strong> vous défie à <span className="game-title">{inv.jeu?.titre}</span></p>
+                    {/* FIX : utilisation des champs DTO (senderPseudo, jeuTitre) */}
+                    <p><strong>{inv.senderPseudo}</strong> vous défie à <span className="game-title">{inv.jeuTitre}</span></p>
                     <p className="time">{new Date(inv.createdAt).toLocaleTimeString()}</p>
                   </div>
                   <div className="invitation-actions">
@@ -217,8 +227,9 @@ const fetchData = async () => {
               sentInvitations.map(inv => (
                 <div key={inv.id} className="invitation-card sent">
                   <div className="invitation-info">
-                    <p>Défi à <strong>{inv.receiver?.pseudo}</strong></p>
-                    <p className="game-info">Jeu: {inv.jeu?.titre}</p>
+                    {/* FIX : utilisation des champs DTO (receiverPseudo, jeuTitre) */}
+                    <p>Défi à <strong>{inv.receiverPseudo}</strong></p>
+                    <p className="game-info">Jeu: {inv.jeuTitre}</p>
                     <p className="time">{new Date(inv.createdAt).toLocaleTimeString()}</p>
                   </div>
                   <div className="invitation-status">
