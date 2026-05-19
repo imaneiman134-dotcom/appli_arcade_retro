@@ -1,11 +1,12 @@
 package com.arcade.service;
 
 import org.springframework.scheduling.annotation.Scheduled;
-
 import com.arcade.model.Jeu;
 import com.arcade.repository.JeuRepository;
 import org.springframework.stereotype.Service;
-import javax.annotation.PostConstruct;
+
+// NOUVEL IMPORT : Utilisez jakarta au lieu de javax
+import jakarta.annotation.PostConstruct; 
 import java.util.List;
 
 @Service
@@ -22,6 +23,10 @@ public class JeuService {
 
     @PostConstruct
     public void initJeux() {
+        // Nettoyage forcé pour appliquer la limite des 6 jeux selon les spécifications
+        jeuRepository.deleteAll();
+
+        // Réinsertion propre
         if (jeuRepository.count() == 0) {
             jeuRepository.save(new Jeu(null, "Bataille Navale", "Jeu de stratégie 1v1 - Placez vos navires et coulez ceux de votre adversaire", null));
             jeuRepository.save(new Jeu(null, "Puissance 4", "Jeu classique 1v1 - Alignez 4 pions pour gagner", null));
@@ -30,6 +35,7 @@ public class JeuService {
             jeuRepository.save(new Jeu(null, "Brawlbots", "Combat de robots 1v1-4 - Choisissez votre bot et éliminez vos ennemis", null));
             jeuRepository.save(new Jeu(null, "Match Masters", "Puzzle 1v1 - Marquez plus de points que votre adversaire en 15 tours", null));
         }
+        System.out.println("✅ Base de données des jeux initialisée avec succès !");
     }
 
     public List<Jeu> getAllJeux() {
