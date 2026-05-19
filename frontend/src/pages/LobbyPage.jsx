@@ -40,8 +40,23 @@ const LobbyPage = () => {
         
         stompClient.subscribe(`/topic/invitations/${userId}`, (message) => {
           console.log('Notification reçue:', message.body);
+          
+          // Vérifier si c'est un démarrage de match
+          if (message.body.startsWith("MATCH_START:")) {
+             const parts = message.body.split(":");
+             const matchId = parts[1];
+             const jeuId = parts[2];
+             const jeuTitre = parts[3];
+             
+             const route = getGameRoute(jeuTitre);
+             
+             // Redirige l'expéditeur ("test") vers la partie
+             navigate(`/game/${route}/${jeuId}?matchId=${matchId}`);
+             return; 
+          }
+
           fetchData();
-          setSuccessMessage("🔔 Nouvelle invitation reçue !");
+          setSuccessMessage("🔔 Nouvelle notification !");
           setTimeout(() => setSuccessMessage(''), 4000);
         });
       },

@@ -84,6 +84,15 @@ public class InvitationController {
     public ResponseEntity<?> acceptInvitation(@PathVariable Long invitationId) {
         try {
             Match match = invitationService.acceptInvitation(invitationId);
+            
+            if (match.getPlayer1() != null) {
+                Long senderId = match.getPlayer1().getId(); 
+                
+                // On envoie une chaîne formatée : "MATCH_START:matchId:jeuId:jeuTitre"
+                String message = "MATCH_START:" + match.getId() + ":" + match.getJeu().getId() + ":" + match.getJeu().getTitre();
+                messagingTemplate.convertAndSend("/topic/invitations/" + senderId, message);
+            }
+
             return ResponseEntity.ok(match);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
