@@ -1,0 +1,158 @@
+.connect4-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Arial', sans-serif;
+  background-color: #f0f4f8;
+  min-height: 80vh;
+  padding: 20px;
+}
+
+.connect4-container h1 {
+  color: #2c3e50;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.multiplayer-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: white;
+  padding: 15px 30px;
+  border-radius: 30px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  margin-bottom: 20px;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.player-info.active {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.player-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset -2px -2px 5px rgba(0,0,0,0.3);
+}
+
+.vs {
+  font-weight: 900;
+  color: #7f8c8d;
+}
+
+/* --- LA GRILLE DE JEU --- */
+.connect4-board {
+  display: flex;
+  background-color: #1a5276; /* Bleu classique de la grille */
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.3), inset 0 5px 15px rgba(255,255,255,0.2);
+  cursor: pointer;
+}
+
+.connect4-column {
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.2s ease;
+  border-radius: 50px;
+}
+
+.connect4-column:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Surligne la colonne au survol */
+}
+
+.connect4-cell {
+  width: 60px;
+  height: 60px;
+  background-color: #f0f4f8; /* Doit être la même couleur que le fond de la page pour simuler un trou */
+  border-radius: 50%;
+  margin: 5px;
+  position: relative;
+  overflow: hidden; /* Empêche le jeton de déborder du trou pendant la chute */
+  box-shadow: inset 0 5px 10px rgba(0,0,0,0.5); /* Effet de profondeur du trou */
+}
+
+/* --- LES JETONS --- */
+.pion {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4), inset 5px 5px 15px rgba(255,255,255,0.4);
+  animation: dropIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; /* Effet de rebond */
+}
+
+.pion.red {
+  background-color: #e74c3c;
+}
+
+.pion.yellow {
+  background-color: #f1c40f;
+}
+
+/* Animation de chute */
+@keyframes dropIn {
+  0% { transform: translateY(-400px); }
+  60% { transform: translateY(10px); }
+  80% { transform: translateY(-5px); }
+  100% { transform: translateY(0); }
+}
+
+/* --- OVERLAY DE FIN DE PARTIE --- */
+.game-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 40px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  animation: popIn 0.3s ease-out;
+  z-index: 100;
+}
+
+.game-overlay h2 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.game-overlay p {
+  color: #7f8c8d;
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+}
+
+.btn-secondary {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #2980b9;
+}
+
+@keyframes popIn {
+  from { transform: translate(-50%, -40%); opacity: 0; }
+  to { transform: translate(-50%, -50%); opacity: 1; }
+}
