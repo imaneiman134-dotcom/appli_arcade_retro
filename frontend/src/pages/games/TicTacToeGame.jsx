@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-// IMPORT DU NOUVEAU HOOK
-import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 
 const WIN_LINES = [
   [0,1,2],[3,4,5],[6,7,8],
@@ -21,119 +21,109 @@ export default function TicTacToeGame() {
   const [board, setBoard] = useState(Array(9).fill(null));
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState('');
-  const [currentPlayer, setCurrentPlayer] = useState('X'); // X commence toujours
+  const [currentPlayer, setCurrentPlayer] = useState('X'); 
   
-  const [playerRole, setPlayerRole] = useState(null); // 'X' (Joueur 1) ou 'O' (Joueur 2)
+  const [playerRole, setPlayerRole] = useState(null); 
+  const [stompClient, setStompClient] = useState(null);
 
   const { jeuId } = useParams();
   const [searchParams] = useSearchParams();
   const matchId = searchParams.get('matchId');
   const navigate = useNavigate();
-  
   const userId = localStorage.getItem('userId');
-  const authToken = localStorage.getItem('authToken'); // Sécurité WebSocket
 
   const saveScore = async (pts) => {
     if (!userId || !jeuId) return;
     try { await scoreService.saveScore(parseInt(userId), parseInt(jeuId), pts); } catch(e) {}
   };
 
-  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
-  const handleMessageReceived = (message) => {
-    if (message.actionType === 'MOVE') {
-      const { position, role } = message.payload;
-      handleIncomingMove(position, role);
-    }
-  };
-
-  // Initialisation du Hook multijoueur
-  const { isConnected, sendSyncEvent } = useMultiplayerSync(
-    matchId,
-    userId,
-    authToken,
-    handleMessageReceived
-  );
-  // ------------------------------------------------------
-
   useEffect(() => {
     if (!userId || !matchId) return;
 
-    // 1. Déterminer le rôle du joueur (X ou O) via l'API Match avec notre service
-    const fetchMatchData = async () => {
-        try {
-            const res = await matchService.getMatch(matchId);
-            const match = res.data;
-            if (match.player1?.id.toString() === userId) {
-                setPlayerRole('X');
-            } else if (match.player2?.id.toString() === userId) {
-                setPlayerRole('O');
-            }
-        } catch (err) {
-            console.error("Erreur chargement rôles:", err);
+    matchService.getMatch(matchId)
+      .then(res => {
+        const match = res.data;
+        if (match.player1?.id.toString() === userId) {
+          setPlayerRole('X');
+        } else if (match.player2?.id.toString() === userId) {
+          setPlayerRole('O');
         }
-    };
+      })
+      .catch(err => console.error("Erreur chargement rôles:", err));
 
-    fetchMatchData();
-    // Le hook gère la connexion WebSocket tout seul !
+    const currentHost = window.location.hostname;
+    const socketUrl = `http://${currentHost}:8080/ws-arcade`;
+    const socket = new SockJS(socketUrl);
+    
+    const client = new Client({
+      webSocketFactory: () => socket,
+      onConnect: () => {
+        console.log(`🔌 Connecté au plateau du match ${matchId}`);
+        
+        client.subscribe(`/topic/game/${matchId}`, (message) => {
+          const move = JSON.parse(message.body);
+          handleIncomingMove(move.position, move.role);
+        });
+      }
+    });
+
+    client.activate();
+    setStompClient(client);
+
+    return () => client.deactivate(); 
   }, [userId, matchId]);
 
-  // Fonction pour traiter un mouvement (le nôtre ou celui de l'adversaire)
   const handleIncomingMove = (position, role) => {
     setBoard(prev => {
       const newBoard = [...prev];
-      if (newBoard[position]) return prev; // Sécurité
+      if (newBoard[position]) return prev;
 
       newBoard[position] = role;
       
       const w = checkWinner(newBoard);
       if (w) {
-        // setTimeout pour s'assurer que l'état a bien le dernier rôle affiché
         setTimeout(() => endGame(w), 50); 
       } else {
-        setCurrentPlayer(role === 'X' ? 'O' : 'X'); // Au tour de l'autre
+        setCurrentPlayer(role === 'X' ? 'O' : 'X');
       }
       
       return newBoard;
     });
   };
 
-  // Fonction pour gérer la fin du jeu
   const endGame = (w) => {
     setGameOver(true);
     setPlayerRole(currentRole => {
         if (w === currentRole) { 
-            setResult('🎉 Victoire ! +10 pts'); 
+            setResult('Victoire ! +10 pts'); 
             saveScore(10); 
-            // On déclare le gagnant au backend
-            if (matchId) matchService.setMatchWinner(matchId, userId).catch(e => console.error(e));
         } else if (w === 'draw') { 
-            setResult('🤝 Match nul ! +5 pts'); 
+            setResult('Match nul ! +5 pts'); 
             saveScore(5); 
         } else { 
-            setResult('💀 Défaite...'); 
+            setResult('Défaite...'); 
         }
         return currentRole;
     });
   };
 
-  // Fonction quand JE clique sur une case
   const handleClick = (i) => {
-    // BLOCAGE : Si la case est prise, le jeu est fini, ou CE N'EST PAS MON TOUR !
     if (board[i] || gameOver || currentPlayer !== playerRole) {
       return; 
     }
     
-    if (isConnected) {
-      // 1. Jouer le coup localement pour un affichage immédiat
-      handleIncomingMove(i, playerRole);
-
-      // 2. Envoyer le coup à l'adversaire
-      sendSyncEvent('MOVE', {
+    if (stompClient && stompClient.connected) {
+      const move = {
+        matchId: parseInt(matchId),
+        playerId: parseInt(userId),
         position: i,
         role: playerRole
+      };
+      
+      stompClient.publish({
+        destination: '/app/game.move',
+        body: JSON.stringify(move)
       });
-    } else {
-      console.warn("Attente de connexion réseau...");
     }
   };
 
@@ -155,7 +145,7 @@ export default function TicTacToeGame() {
             backgroundColor: currentPlayer === playerRole ? 'rgba(0,255,0,0.1)' : 'rgba(255,0,0,0.1)',
             borderRadius: '5px'
         }}>
-          {currentPlayer === playerRole ? "🟢 C'est à VOTRE tour de jouer !" : "🔴 En attente de l'adversaire..."}
+          {currentPlayer === playerRole ? "C'est à VOTRE tour de jouer !" : "En attente de l'adversaire..."}
         </p>
       </div>
       

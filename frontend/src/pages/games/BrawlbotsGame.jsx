@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-// IMPORT DU NOUVEAU HOOK (Ajustez le chemin selon l'arborescence de votre projet)
-import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 import './brawlbots.css';
 
 const BrawlbotsGame = () => {
@@ -11,51 +11,29 @@ const BrawlbotsGame = () => {
   const matchId = searchParams.get('matchId');
   const navigate = useNavigate();
   
-  // États de la partie
   const [loading, setLoading] = useState(true);
   const [matchData, setMatchData] = useState(null);
+  const [stompClient, setStompClient] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [roundMessage, setRoundMessage] = useState("Choisissez votre action !");
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Mon profil
   const userId = localStorage.getItem('userId');
-  const authToken = localStorage.getItem('authToken'); // Ajout pour la sécurité WebSocket
   const [myName, setMyName] = useState("Vous");
   const [myHealth, setMyHealth] = useState(100);
   const [myAction, setMyAction] = useState(null);
   const [myEffect, setMyEffect] = useState(null);
 
-  // Profil de l'Adversaire
   const [opponentName, setOpponentName] = useState("Adversaire");
   const [opponentHealth, setOpponentHealth] = useState(100);
   const [opponentAction, setOpponentAction] = useState(null);
   const [opponentEffect, setOpponentEffect] = useState(null);
   const [opponentHasPlayed, setOpponentHasPlayed] = useState(false);
 
-  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
-  const handleMessageReceived = (message) => {
-    const action = message.actionType;
-    
-    // Le hook filtre déjà nos propres messages, donc on sait que ça vient de l'adversaire
-    if (action === 'ATTACK' || action === 'DEFEND') {
-      setOpponentAction(action);
-      setOpponentHasPlayed(true);
-    }
-  };
-
-  const { isConnected, sendSyncEvent } = useMultiplayerSync(
-    matchId,
-    userId,
-    authToken,
-    handleMessageReceived
-  );
-  // ------------------------------------------------------
-
   useEffect(() => {
     if (!matchId || !userId) return;
 
-    const fetchMatchData = async () => {
+    const fetchMatchDataAndConnect = async () => {
       try {
         const res = await matchService.getMatch(matchId);
         const match = res.data;
@@ -69,6 +47,23 @@ const BrawlbotsGame = () => {
           setOpponentName(match.player1?.pseudo || "Joueur 1");
         }
 
+        const currentHost = window.location.hostname;
+        const socketUrl = `http://${currentHost}:8080/ws-arcade`;
+        const socket = new SockJS(socketUrl);
+        
+        const client = new Client({
+          webSocketFactory: () => socket,
+          onConnect: () => {
+            console.log(`Connecté à Brawlbots (Match ${matchId})`);
+            client.subscribe(`/topic/game/${matchId}`, (message) => {
+              const move = JSON.parse(message.body);
+              handleNetworkMessage(move.role, move.playerId);
+            });
+          }
+        });
+
+        client.activate();
+        setStompClient(client);
         setLoading(false);
 
       } catch (err) {
@@ -77,9 +72,17 @@ const BrawlbotsGame = () => {
       }
     };
 
-    fetchMatchData();
-    // Plus besoin d'initialiser manuellement SockJS, le hook s'en occupe !
+    fetchMatchDataAndConnect();
+
+    return () => { if (stompClient) stompClient.deactivate(); };
   }, [matchId, userId]);
+
+  const handleNetworkMessage = (action, senderId) => {
+    if (senderId.toString() !== userId) {
+      setOpponentAction(action);
+      setOpponentHasPlayed(true);
+    }
+  };
 
   useEffect(() => {
     if (myAction && opponentAction && !isAnimating && !gameOver) {
@@ -96,15 +99,19 @@ const BrawlbotsGame = () => {
   const handleActionClick = (actionType) => {
     if (isAnimating || myAction || gameOver) return;
     
-    // 1. Enregistre l'action localement
     setMyAction(actionType);
     setRoundMessage(opponentHasPlayed ? "Résolution imminente..." : "En attente de l'adversaire...");
     
-    // 2. Envoie l'action à l'adversaire via le hook
-    if (isConnected) {
-      sendSyncEvent(actionType, {}); 
-    } else {
-      console.warn("Attente de connexion réseau...");
+    if (stompClient && stompClient.connected) {
+      stompClient.publish({
+        destination: '/app/game.move',
+        body: JSON.stringify({
+          matchId: parseInt(matchId),
+          playerId: parseInt(userId),
+          position: 0,
+          role: actionType
+        })
+      });
     }
   };
 
@@ -135,9 +142,7 @@ const BrawlbotsGame = () => {
       setOpponentHasPlayed(false);
       
       setIsAnimating(false);
-      if (myHealth - myDmgTaken > 0 && opponentHealth - oppDmgTaken > 0) {
-          setRoundMessage("Nouveau round ! Choisissez une action.");
-      }
+      setRoundMessage("Nouveau round ! Choisissez une action.");
     }, 2000); 
   };
 
@@ -170,9 +175,8 @@ const BrawlbotsGame = () => {
       </div>
 
       <div className="battlefield">
-        {/* MON BOT (GAUCHE) */}
+        {/* MON ROBOT */}
         <div className={`bot-container left ${myEffect === 'ATTACK' ? 'attacking' : ''}`}>
-          
           <div className="health-bar-container" style={{ border: '2px solid white', width: '100%', height: '25px', backgroundColor: '#333', position: 'relative', borderRadius: '5px', overflow: 'hidden' }}>
             <div className="health-bar" style={{ width: `${myHealth}%`, backgroundColor: myHealth > 30 ? '#2ecc71' : '#e74c3c', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>
             <span style={{ position: 'absolute', top: '2px', left: '50%', transform: 'translateX(-50%)', color: 'white', fontWeight: 'bold', textShadow: '1px 1px 2px black', fontSize: '14px' }}>
@@ -181,18 +185,30 @@ const BrawlbotsGame = () => {
           </div>
 
           <div className="bot-sprite">
-            🤖
-            {myEffect === 'DEFEND' && <div className="shield-effect">🛡️</div>}
-            {myEffect === 'ATTACK' && <div className="fire-effect">🔥</div>}
+            <img 
+              src="/images/mon-robot.png" 
+              alt="Mon Robot" 
+              style={{ width: '120px', height: 'auto', objectFit: 'contain' }} 
+            />
+
+            {myEffect === 'DEFEND' && (
+              <div className="shield-effect">
+                <img src="/images/bouclier.jpg" alt="Bouclier" style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '50%' }} />
+              </div>
+            )}
+            {myEffect === 'ATTACK' && (
+              <div className="fire-effect">
+                <img src="/images/fire.jpeg" alt="Feu" style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '50%' }} />
+              </div>
+            )}
           </div>
           <h3>{myName} (Vous)</h3>
         </div>
 
         <div className="vs-badge">VS</div>
 
-        {/* BOT ADVERSE (DROITE) */}
+        {/* ROBOT ADVERSE */}
         <div className={`bot-container right ${opponentEffect === 'ATTACK' ? 'attacking' : ''}`}>
-          
           <div className="health-bar-container" style={{ border: '2px solid white', width: '100%', height: '25px', backgroundColor: '#333', position: 'relative', borderRadius: '5px', overflow: 'hidden' }}>
             <div className="health-bar" style={{ width: `${opponentHealth}%`, backgroundColor: opponentHealth > 30 ? '#e67e22' : '#e74c3c', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>
             <span style={{ position: 'absolute', top: '2px', left: '50%', transform: 'translateX(-50%)', color: 'white', fontWeight: 'bold', textShadow: '1px 1px 2px black', fontSize: '14px' }}>
@@ -201,16 +217,28 @@ const BrawlbotsGame = () => {
           </div>
 
           <div className="bot-sprite">
-            👾
-            {opponentEffect === 'DEFEND' && <div className="shield-effect">🛡️</div>}
-            {opponentEffect === 'ATTACK' && <div className="fire-effect">🔥</div>}
+            <img 
+              src="/images/robot-ennemi.png" 
+              alt="Robot Ennemi" 
+              style={{ width: '120px', height: 'auto', objectFit: 'contain', transform: 'scaleX(-1)' }} 
+            />
+
+            {opponentEffect === 'DEFEND' && (
+              <div className="shield-effect">
+                <img src="/images/bouclier.jpg" alt="Bouclier" style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '50%' }} />
+              </div>
+            )}
+            {opponentEffect === 'ATTACK' && (
+              <div className="fire-effect">
+                <img src="/images/fire.jpeg" alt="Feu" style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '50%' }} />
+              </div>
+            )}
             {opponentHasPlayed && !isAnimating && !gameOver && <div className="ready-indicator">Prêt</div>}
           </div>
           <h3>{opponentName}</h3>
         </div>
       </div>
 
-      {/* PANNEAU DE CONTRÔLE */}
       {!gameOver ? (
         <div className="control-panel">
           <button 
@@ -218,14 +246,14 @@ const BrawlbotsGame = () => {
             onClick={() => handleActionClick('ATTACK')}
             disabled={isAnimating || myAction}
           >
-            ⚔️ Attaquer
+            Attaquer
           </button>
           <button 
             className={`btn-action defend ${myAction === 'DEFEND' ? 'selected' : ''}`}
             onClick={() => handleActionClick('DEFEND')}
             disabled={isAnimating || myAction}
           >
-            🛡️ Défendre
+            Défendre
           </button>
         </div>
       ) : (

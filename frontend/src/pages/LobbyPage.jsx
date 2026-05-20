@@ -36,7 +36,7 @@ const LobbyPage = () => {
     const stompClient = new Client({
       webSocketFactory: () => socket,
       onConnect: () => {
-        console.log('🔌 Connecté au serveur d\'Arcade (WebSocket)');
+        console.log('Connecté au serveur d\'Arcade (WebSocket)');
         
         stompClient.subscribe(`/topic/invitations/${userId}`, (message) => {
           console.log('Notification reçue:', message.body);
@@ -50,13 +50,12 @@ const LobbyPage = () => {
              
              const route = getGameRoute(jeuTitre);
              
-             // Redirige l'expéditeur ("test") vers la partie
              navigate(`/game/${route}/${jeuId}?matchId=${matchId}`);
              return; 
           }
 
           fetchData();
-          setSuccessMessage("🔔 Nouvelle notification !");
+          setSuccessMessage("Nouvelle notification!");
           setTimeout(() => setSuccessMessage(''), 4000);
         });
       },
@@ -108,12 +107,12 @@ const LobbyPage = () => {
     try {
       await invitationService.sendInvitation(userId, inviteForm.receiverPseudo, inviteForm.jeuId);
       setInviteForm({ receiverPseudo: '', jeuId: '' });
-      setSuccessMessage('✅ Invitation envoyée avec succès !');
+      setSuccessMessage('Invitation envoyée avec succès!');
       setTimeout(() => setSuccessMessage(''), 3000);
       fetchData();
     } catch (err) {
       // On logge l'erreur complète dans la console pour enquêter
-      console.error("🔴 Erreur brute Axios :", err);
+      console.error("Erreur brute Axios :", err);
       console.log("Données renvoyées par le backend :", err.response?.data);
 
       const backendData = err.response?.data;
@@ -175,15 +174,14 @@ const LobbyPage = () => {
 
   return (
     <div className="lobby-page">
-      <h1>🎮 Salon Multijoueur</h1>
+      <h1>Salon Multijoueur</h1>
       
       {error && <div className="error-message">{error}</div>}
       {successMessage && <div className="success-message">{successMessage}</div>}
 
       <div className="lobby-container">
-        {/* SECTION INVITATIONS REÇUES */}
         <div className="lobby-section">
-          <h2>📬 Invitations reçues ({receivedInvitations.length})</h2>
+          <h2>Invitations reçues ({receivedInvitations.length})</h2>
           <div className="invitations-list">
             {receivedInvitations.length === 0 ? (
               <p className="empty-message">Aucune invitation reçue</p>
@@ -191,13 +189,12 @@ const LobbyPage = () => {
               receivedInvitations.map(inv => (
                 <div key={inv.id} className="invitation-card received">
                   <div className="invitation-info">
-                    {/* FIX : utilisation des champs DTO (senderPseudo, jeuTitre) */}
                     <p><strong>{inv.senderPseudo}</strong> vous défie à <span className="game-title">{inv.jeuTitre}</span></p>
                     <p className="time">{new Date(inv.createdAt).toLocaleTimeString()}</p>
                   </div>
                   <div className="invitation-actions">
-                    <button className="btn-accept" onClick={() => handleAccept(inv.id)}>✓ Accepter</button>
-                    <button className="btn-decline" onClick={() => handleDecline(inv.id)}>✗ Refuser</button>
+                    <button className="btn-accept" onClick={() => handleAccept(inv.id)}>Accepter</button>
+                    <button className="btn-decline" onClick={() => handleDecline(inv.id)}>Refuser</button>
                   </div>
                 </div>
               ))
@@ -205,9 +202,8 @@ const LobbyPage = () => {
           </div>
         </div>
 
-        {/* SECTION DÉFIER UN JOUEUR */}
         <div className="lobby-section">
-          <h2>⚔️ Défier un joueur</h2>
+          <h2>Défier un joueur</h2>
           <form onSubmit={handleInviteSubmit} className="invite-form">
             <div className="form-group">
               <label>Pseudo de l'adversaire</label>
@@ -230,11 +226,10 @@ const LobbyPage = () => {
                 ))}
               </select>
             </div>
-            <button type="submit" className="btn-primary">📤 Envoyer l'invitation</button>
+            <button type="submit" className="btn-primary">Envoyer l'invitation</button>
           </form>
 
-          {/* SECTION INVITATIONS ENVOYÉES */}
-          <h2 style={{marginTop: '30px'}}>📤 Invitations envoyées ({sentInvitations.length})</h2>
+          <h2 style={{marginTop: '30px'}}>Invitations envoyées ({sentInvitations.length})</h2>
           <div className="invitations-list">
             {sentInvitations.length === 0 ? (
               <p className="empty-message">Aucune invitation envoyée</p>
@@ -242,7 +237,6 @@ const LobbyPage = () => {
               sentInvitations.map(inv => (
                 <div key={inv.id} className="invitation-card sent">
                   <div className="invitation-info">
-                    {/* FIX : utilisation des champs DTO (receiverPseudo, jeuTitre) */}
                     <p>Défi à <strong>{inv.receiverPseudo}</strong></p>
                     <p className="game-info">Jeu: {inv.jeuTitre}</p>
                     <p className="time">{new Date(inv.createdAt).toLocaleTimeString()}</p>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 import './battleship.css'; 
 
 const BattleshipGame = () => {
@@ -11,7 +12,7 @@ const BattleshipGame = () => {
   const navigate = useNavigate();
   
   // États du jeu
-  const [phase, setPhase] = useState('setup'); // 'setup', 'waiting', 'play', 'finished'
+  const [phase, setPhase] = useState('setup');
   const [myGrid, setMyGrid] = useState(Array(10).fill(null).map(() => Array(10).fill(null)));
   const [opponentGrid, setOpponentGrid] = useState(Array(10).fill(null).map(() => Array(10).fill(null)));
   
@@ -22,8 +23,9 @@ const BattleshipGame = () => {
   // Multijoueur
   const [matchData, setMatchData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [stompClient, setStompClient] = useState(null);
   const [playerRole, setPlayerRole] = useState(null); 
-  const [currentPlayer, setCurrentPlayer] = useState('player1'); // player1 tire en premier
+  const [currentPlayer, setCurrentPlayer] = useState('player1');
   
   const [myReady, setMyReady] = useState(false);
   const [opponentReady, setOpponentReady] = useState(false);
@@ -32,7 +34,6 @@ const BattleshipGame = () => {
   const [opponentHits, setOpponentHits] = useState(0); 
   
   const userId = localStorage.getItem('userId');
-  const authToken = localStorage.getItem('authToken'); // Ajout pour la sécurité
 
   const myGridRef = useRef(myGrid);
   const phaseRef = useRef(phase);
@@ -42,86 +43,10 @@ const BattleshipGame = () => {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { myReadyRef.current = myReady; }, [myReady]);
 
-  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
-  const handleMessageReceived = (message) => {
-    const action = message.actionType;
-    const payload = message.payload;
-
-    // L'adversaire a fini de placer ses bateaux
-    if (action === 'READY') {
-      setOpponentReady(true);
-      // Si on est déjà prêt, on lui renvoie READY pour s'assurer qu'il le sait
-      if (myReadyRef.current && phaseRef.current === 'waiting') {
-        sendSyncEvent('READY', { position: -1 });
-      }
-    } 
-    // L'adversaire nous attaque
-    else if (action === 'ATTACK') {
-      if (phaseRef.current === 'waiting') setPhase('play');
-
-      const pos = payload.position;
-      const row = Math.floor(pos / 10);
-      const col = pos % 10;
-      const cell = myGridRef.current[row][col];
-      
-      // On calcule si l'adversaire nous a touché
-      const isHit = cell !== null && cell.includes('ship');
-
-      // Mise à jour de notre propre flotte (en local)
-      setMyGrid(prev => {
-        const newGrid = prev.map(r => [...r]);
-        const currentCell = newGrid[row][col] || '';
-        newGrid[row][col] = currentCell + (isHit ? ' hit' : ' miss');
-        return newGrid;
-      });
-      
-      if (isHit) setOpponentHits(prev => prev + 1);
-      
-      // On change le tour
-      setCurrentPlayer(prev => prev === 'player1' ? 'player2' : 'player1');
-
-      // On renvoie le résultat à l'adversaire (Touché ou Manqué)
-      sendSyncEvent(isHit ? 'HIT' : 'MISS', { position: pos });
-    } 
-    // L'adversaire nous répond suite à notre attaque (Il a été Touché ou Manqué)
-    else if (action === 'HIT' || action === 'MISS') {
-      const pos = payload.position;
-      const row = Math.floor(pos / 10);
-      const col = pos % 10;
-
-      // On met à jour notre radar avec son résultat
-      setOpponentGrid(prev => {
-        const newGrid = prev.map(r => [...r]);
-        newGrid[row][col] = action === 'HIT' ? 'hit' : 'miss';
-        return newGrid;
-      });
-      
-      if (action === 'HIT') {
-        setMyHits(prev => {
-          const next = prev + 1;
-          // Victoire si on atteint 17
-          if (next >= 17) setTimeout(() => endGame('victory'), 500); 
-          return next;
-        });
-      }
-
-      // On change le tour
-      setCurrentPlayer(prev => prev === 'player1' ? 'player2' : 'player1');
-    }
-  };
-
-  const { isConnected, sendSyncEvent } = useMultiplayerSync(
-    matchId,
-    userId,
-    authToken,
-    handleMessageReceived
-  );
-  // ------------------------------------------------------
-
   useEffect(() => {
     if (!matchId || !userId) return;
 
-    const fetchMatchData = async () => {
+    const fetchMatchDataAndConnect = async () => {
       try {
         const res = await matchService.getMatch(matchId);
         const match = res.data;
@@ -132,6 +57,22 @@ const BattleshipGame = () => {
         else if (match.player2?.id.toString() === userId) role = 'player2';
         setPlayerRole(role);
 
+        // FIX LAN : On utilise l'IP de la machine locale
+        const currentHost = window.location.hostname;
+        const socket = new SockJS(`http://${currentHost}:8080/ws-arcade`);
+        const client = new Client({
+          webSocketFactory: () => socket,
+          onConnect: () => {
+            console.log(`Connecté à la Bataille Navale (Match ${matchId})`);
+            client.subscribe(`/topic/game/${matchId}`, (message) => {
+              const move = JSON.parse(message.body);
+              handleNetworkMessage(move.position, move.role, move.playerId, client);
+            });
+          }
+        });
+
+        client.activate();
+        setStompClient(client);
         setLoading(false);
       } catch (err) {
         console.error('Erreur:', err);
@@ -139,8 +80,8 @@ const BattleshipGame = () => {
       }
     };
 
-    fetchMatchData();
-    // Le hook gère la connexion automatiquement !
+    fetchMatchDataAndConnect();
+    return () => { if (stompClient) stompClient.deactivate(); };
   }, [matchId, userId]);
 
   useEffect(() => {
@@ -148,6 +89,66 @@ const BattleshipGame = () => {
       setPhase('play');
     }
   }, [myReady, opponentReady, phase]);
+
+  const handleNetworkMessage = (position, action, senderId, activeClient) => {
+    const row = Math.floor(position / 10);
+    const col = position % 10;
+
+    if (action === 'READY' && senderId.toString() !== userId) {
+      setOpponentReady(true);
+      
+      if (myReadyRef.current && phaseRef.current === 'waiting') {
+        activeClient.publish({
+          destination: '/app/game.move',
+          body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: -1, role: 'READY' })
+        });
+      }
+    } 
+    else if (action === 'ATTACK' && senderId.toString() !== userId) {
+      if (phaseRef.current === 'waiting') setPhase('play');
+
+      const cell = myGridRef.current[row][col];
+      const isHit = cell !== null && cell.includes('ship');
+
+      activeClient.publish({
+        destination: '/app/game.move',
+        body: JSON.stringify({
+          matchId: parseInt(matchId),
+          playerId: parseInt(userId), 
+          position: position,
+          role: isHit ? 'HIT' : 'MISS'
+        })
+      });
+    } 
+    else if (action === 'HIT' || action === 'MISS') {
+      if (senderId.toString() !== userId) {
+        setOpponentGrid(prev => {
+          const newGrid = prev.map(r => [...r]);
+          newGrid[row][col] = action === 'HIT' ? 'hit' : 'miss';
+          return newGrid;
+        });
+        
+        if (action === 'HIT') {
+          setMyHits(prev => {
+            const next = prev + 1;
+            if (next >= 17) setTimeout(() => endGame('victory'), 500); 
+            return next;
+          });
+        }
+      } else {
+        setMyGrid(prev => {
+          const newGrid = prev.map(r => [...r]);
+          const currentCell = newGrid[row][col] || '';
+          newGrid[row][col] = currentCell + (action === 'HIT' ? ' hit' : ' miss');
+          return newGrid;
+        });
+        
+        if (action === 'HIT') setOpponentHits(prev => prev + 1);
+      }
+      
+      setCurrentPlayer(prev => prev === 'player1' ? 'player2' : 'player1');
+    }
+  };
 
   const endGame = async (status) => {
     setPhase('finished');
@@ -160,7 +161,6 @@ const BattleshipGame = () => {
   };
 
   const handleCellClick = (row, col) => {
-    // Phase de Placement
     if (phase === 'setup') {
       if (currentShipIndex >= shipsToPlace.length) return;
       const size = shipsToPlace[currentShipIndex];
@@ -185,17 +185,18 @@ const BattleshipGame = () => {
       setMyGrid(newGrid);
       setCurrentShipIndex(currentShipIndex + 1);
       
-      // On a posé notre dernier bateau
       if (currentShipIndex + 1 === shipsToPlace.length) {
         setMyReady(true);
         setPhase('waiting');
         
-        if (isConnected) {
-          sendSyncEvent('READY', { position: -1 });
+        if (stompClient && stompClient.connected) {
+            stompClient.publish({
+            destination: '/app/game.move',
+            body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: -1, role: 'READY' })
+            });
         }
       }
     } 
-    // Phase d'Attaque
     else if (phase === 'play') {
       if (currentPlayer !== playerRole) {
           console.log("Ce n'est pas votre tour de jouer !");
@@ -203,11 +204,10 @@ const BattleshipGame = () => {
       }
       if (opponentGrid[row][col] === 'hit' || opponentGrid[row][col] === 'miss') return; 
 
-      if (isConnected) {
-        sendSyncEvent('ATTACK', { position: (row * 10) + col });
-      } else {
-        console.warn("Attente de connexion réseau...");
-      }
+      stompClient.publish({
+        destination: '/app/game.move',
+        body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: (row * 10) + col, role: 'ATTACK' })
+      });
     }
   };
 
@@ -292,7 +292,7 @@ const BattleshipGame = () => {
       {phase === 'finished' && (
         <div className="victory-screen" style={{ textAlign: 'center', marginTop: '20px' }}>
           <h2>{myHits >= 17 ? 'VICTOIRE ! Flotte ennemie anéantie.' : 'DÉFAITE. Votre flotte a coulé.'}</h2>
-          <button onClick={() => navigate('/lobby')} className="btn-secondary" style={{ marginTop: '20px' }}>Retourner au QG (Lobby)</button>
+          <button onClick={() => navigate('/lobby')} className="btn-secondary" style={{ marginTop: '20px' }}>Retourner au Lobby</button>
         </div>
       )}
     </div>

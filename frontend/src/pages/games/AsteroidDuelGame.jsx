@@ -43,7 +43,6 @@ const AsteroidDuelGame = () => {
     };
   }, []);
 
-  // 2. Moteur de jeu principal (Boucle à 60 FPS)
   useEffect(() => {
     if (!gameStarted || gameOver) return;
     const canvas = canvasRef.current;
@@ -57,43 +56,32 @@ const AsteroidDuelGame = () => {
       const bulletSpeed = 10;
       const fireRate = 300; // Millisecondes entre chaque tir
 
-      // --- PHYSIQUE & MOUVEMENTS ---
-      
-      // Joueur 1 (Z, Q, S, D)
       if (keys.current['z']) p1Ref.current.y = Math.max(0, p1Ref.current.y - speed);
       if (keys.current['s']) p1Ref.current.y = Math.min(canvas.height - 30, p1Ref.current.y + speed);
       if (keys.current['q']) p1Ref.current.x = Math.max(0, p1Ref.current.x - speed);
       if (keys.current['d']) p1Ref.current.x = Math.min(canvas.width / 2 - 30, p1Ref.current.x + speed); // Bloqué à la moitié gauche
 
-      // Joueur 2 (Flèches)
       if (keys.current['arrowup']) p2Ref.current.y = Math.max(0, p2Ref.current.y - speed);
       if (keys.current['arrowdown']) p2Ref.current.y = Math.min(canvas.height - 30, p2Ref.current.y + speed);
       if (keys.current['arrowleft']) p2Ref.current.x = Math.max(canvas.width / 2, p2Ref.current.x - speed); // Bloqué à la moitié droite
       if (keys.current['arrowright']) p2Ref.current.x = Math.min(canvas.width - 30, p2Ref.current.x + speed);
 
-      // --- TIRS DES LASERS ---
-      
-      // Joueur 1 (Touche Espace)
       if (keys.current[' '] && now - p1Ref.current.lastShot > fireRate) {
         p1Ref.current.bullets.push({ x: p1Ref.current.x + 30, y: p1Ref.current.y + 15 });
         p1Ref.current.lastShot = now;
       }
       
-      // Joueur 2 (Touche Entrée)
       if (keys.current['enter'] && now - p2Ref.current.lastShot > fireRate) {
         p2Ref.current.bullets.push({ x: p2Ref.current.x, y: p2Ref.current.y + 15 });
         p2Ref.current.lastShot = now;
       }
 
-      // Mise à jour de la position des lasers
       p1Ref.current.bullets.forEach(b => b.x += bulletSpeed);
       p2Ref.current.bullets.forEach(b => b.x -= bulletSpeed);
 
-      // Nettoyage des lasers hors de l'écran
       p1Ref.current.bullets = p1Ref.current.bullets.filter(b => b.x < canvas.width);
       p2Ref.current.bullets = p2Ref.current.bullets.filter(b => b.x > 0);
 
-      // --- MOUVEMENTS DES ASTÉROÏDES ---
       asteroidsRef.current.forEach(ast => {
         ast.x += ast.vx;
         ast.y += ast.vy;
@@ -102,9 +90,6 @@ const AsteroidDuelGame = () => {
         if (ast.y < 0 || ast.y > canvas.height) ast.vy *= -1;
       });
 
-      // --- COLLISIONS ---
-
-      // Collisions Lasers P1 -> Astéroïdes
       p1Ref.current.bullets.forEach((bullet, bIndex) => {
         asteroidsRef.current.forEach((ast, aIndex) => {
           const dist = Math.hypot(bullet.x - ast.x, bullet.y - ast.y);
@@ -116,7 +101,6 @@ const AsteroidDuelGame = () => {
         });
       });
 
-      // Collisions Lasers P2 -> Astéroïdes
       p2Ref.current.bullets.forEach((bullet, bIndex) => {
         asteroidsRef.current.forEach((ast, aIndex) => {
           const dist = Math.hypot(bullet.x - ast.x, bullet.y - ast.y);
@@ -128,7 +112,6 @@ const AsteroidDuelGame = () => {
         });
       });
 
-      // Collisions Lasers -> Joueurs (Dommages)
       p1Ref.current.bullets.forEach((bullet, bIndex) => {
         if (bullet.x > p2Ref.current.x && bullet.x < p2Ref.current.x + p2Ref.current.width &&
             bullet.y > p2Ref.current.y && bullet.y < p2Ref.current.y + p2Ref.current.height) {
@@ -147,7 +130,6 @@ const AsteroidDuelGame = () => {
         }
       });
 
-      // Conditions de victoire (Santé à 0)
       if (p1Ref.current.health <= 0) {
         setWinner('Player 2');
         setGameOver(true);
@@ -156,9 +138,6 @@ const AsteroidDuelGame = () => {
         setGameOver(true);
       }
 
-      // --- RENDU VISUEL SUR LE CANVAS ---
-      
-      // Nettoyage de l'écran avec effet de traînée
       ctx.fillStyle = 'rgba(10, 10, 15, 0.4)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -191,14 +170,12 @@ const AsteroidDuelGame = () => {
         ctx.fill();
         ctx.restore();
 
-        // Barre de vie au-dessus du vaisseau
         ctx.fillStyle = 'red';
         ctx.fillRect(player.x, player.y - 15, 30, 5);
         ctx.fillStyle = '#00ff00';
         ctx.fillRect(player.x, player.y - 15, (player.health / 100) * 30, 5);
       };
 
-      // Dessiner les astéroïdes
       const drawAsteroid = (ast) => {
         ctx.save();
         ctx.translate(ast.x, ast.y);
@@ -217,7 +194,6 @@ const AsteroidDuelGame = () => {
         ctx.restore();
       };
 
-      // Dessiner les lasers
       const drawLaser = (bullet, color) => {
         ctx.beginPath();
         ctx.arc(bullet.x, bullet.y, 4, 0, Math.PI * 2);
@@ -228,7 +204,6 @@ const AsteroidDuelGame = () => {
         ctx.shadowBlur = 0; 
       };
 
-      // Exécution des dessins
       asteroidsRef.current.forEach(drawAsteroid);
       p1Ref.current.bullets.forEach(b => drawLaser(b, '#ffff00'));
       p2Ref.current.bullets.forEach(b => drawLaser(b, '#00ffcc'));
@@ -239,37 +214,33 @@ const AsteroidDuelGame = () => {
       drawShip(p1Ref.current, '#ff6600', 'right', p1Thrusting);
       drawShip(p2Ref.current, '#0066ff', 'left', p2Thrusting);
 
-      // UI (Scores)
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 20px Courier New';
       ctx.fillText(`P1 Score: ${player1Score}`, 20, 30);
       ctx.fillText(`P2 Score: ${player2Score}`, canvas.width - 170, 30);
 
-      // Boucle au prochain rafraîchissement d'écran
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
     animationFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameStarted, gameOver]); // On ne met plus les scores dans les dépendances pour éviter les sauts d'images
+  }, [gameStarted, gameOver]);
 
   const startGame = () => {
-    // Réinitialisation de l'état
     p1Ref.current = { x: 50, y: 250, width: 30, height: 30, health: 100, bullets: [], lastShot: 0 };
     p2Ref.current = { x: 720, y: 250, width: 30, height: 30, health: 100, bullets: [], lastShot: 0 };
     setPlayer1Score(0);
     setPlayer2Score(0);
     setGameOver(false);
     
-    // Génération des astéroïdes
     const newAsteroids = [];
     for (let i = 0; i < 8; i++) {
       newAsteroids.push({
-        x: Math.random() * 400 + 200, // Apparaissent au centre
+        x: Math.random() * 400 + 200, 
         y: Math.random() * 400 + 50,
         size: Math.random() * 15 + 15,
-        vx: (Math.random() * 4 - 2), // Vitesse aléatoire X
-        vy: (Math.random() * 4 - 2)  // Vitesse aléatoire Y
+        vx: (Math.random() * 4 - 2), 
+        vy: (Math.random() * 4 - 2)  
       });
     }
     asteroidsRef.current = newAsteroids;
@@ -278,7 +249,6 @@ const AsteroidDuelGame = () => {
 
   const returnToLobby = () => navigate('/lobby');
 
-  // --- RENDU REACT ---
 
   if (!gameStarted) {
     return (

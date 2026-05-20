@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-// IMPORT DU HOOK MULTIJOUEUR
-import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 import './match-masters.css';
 
 const width = 8;
@@ -30,9 +30,7 @@ const MatchMastersGame = () => {
   const [isMyTurnBlocked, setIsMyTurnBlocked] = useState(true);
 
   const userId = localStorage.getItem('userId');
-  const authToken = localStorage.getItem('authToken'); // Sécurité WebSocket
 
-  // Refs pour le moteur de jeu synchronisé
   const boardRef = useRef(Array(64).fill(''));
   const p1HealthRef = useRef(200);
   const p2HealthRef = useRef(200);
@@ -41,15 +39,11 @@ const MatchMastersGame = () => {
   const gameOverRef = useRef(false);
   const isHostRef = useRef(false); 
   const myRoleRef = useRef(null);
+  const stompClientRef = useRef(null);
   
   const isInitRef = useRef(true);
   const stableTicksRef = useRef(0);
-  const STABLE_TICKS_NEEDED = 3;
-
-  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
-
-  // Ref pour appeler l'envoi d'événement sans casser les dépendances (évite les boucles infinies)
-  const sendSyncEventRef = useRef(null);
+  const STABLE_TICKS_NEEDED = 3; 
 
   const endGame = useCallback(async (winnerRole) => {
     if (gameOverRef.current) return;
@@ -68,90 +62,26 @@ const MatchMastersGame = () => {
   }, [jeuId, matchId, userId]);
 
   const sendSync = useCallback(() => {
-    if (!sendSyncEventRef.current) return;
+    if (!stompClientRef.current || !stompClientRef.current.connected) return;
     
-    // On emballe les données proprement au lieu d'une chaîne stringifiée
-    const payload = {
+    const payload = JSON.stringify({
+        action: 'SYNC',
         p1: p1HealthRef.current,
         p2: p2HealthRef.current,
         turn: currentTurnRef.current,
         board: boardRef.current.map(c => COLOR_MAP[c] || 'E').join('')
-    };
+    });
     
-    sendSyncEventRef.current('SYNC', payload);
+    stompClientRef.current.publish({
+      destination: '/app/game.move',
+      body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: 0, role: payload })
+    });
 
     setCurrentBoard([...boardRef.current]);
     setP1Health(p1HealthRef.current);
     setP2Health(p2HealthRef.current);
     setCurrentTurn(currentTurnRef.current);
-  }, []);
-
-  const handleMessageReceived = useCallback((message) => {
-    const { actionType, payload } = message;
-
-    if (isHostRef.current) {
-        // Le Hôte reçoit des demandes du Joueur 2
-        if (actionType === 'HELLO') {
-            if (!isInitRef.current) {
-                sendSync();
-            }
-        }
-        else if (actionType === 'SWAP') {
-            if (currentTurnRef.current === 'player2' && !isResolvingRef.current) {
-                const c1 = boardRef.current[payload.idx1];
-                const c2 = boardRef.current[payload.idx2];
-                boardRef.current[payload.idx1] = c2;
-                boardRef.current[payload.idx2] = c1;
-                isResolvingRef.current = true;
-                sendSync(); 
-            }
-        }
-    } else {
-        // Le Joueur 2 reçoit les mises à jour de l'Hôte
-        if (actionType === 'SYNC') {
-            p1HealthRef.current = payload.p1;
-            p2HealthRef.current = payload.p2;
-            currentTurnRef.current = payload.turn;
-
-            isResolvingRef.current = false;
-            setIsMyTurnBlocked(payload.turn !== myRoleRef.current);
-
-            setP1Health(payload.p1);
-            setP2Health(payload.p2);
-            setCurrentTurn(payload.turn);
-            
-            const newBoard = payload.board.split('').map(char => REVERSE_MAP[char]);
-            boardRef.current = newBoard;
-            setCurrentBoard(newBoard);
-            
-            if (payload.p1 <= 0 || payload.p2 <= 0) {
-                endGame(payload.p1 <= 0 ? 'player2' : 'player1');
-            }
-        }
-    }
-  }, [sendSync, endGame]);
-
-  // Initialisation du Hook !
-  const { isConnected, sendSyncEvent } = useMultiplayerSync(
-    matchId,
-    userId,
-    authToken,
-    handleMessageReceived
-  );
-
-  // Mise à jour de la référence pour le moteur
-  useEffect(() => {
-    sendSyncEventRef.current = sendSyncEvent;
-  }, [sendSyncEvent]);
-
-  // Envoi du HELLO du joueur 2 une fois connecté
-  useEffect(() => {
-      if (isConnected && myRoleRef.current === 'player2') {
-          sendSyncEvent('HELLO', {});
-      }
-  }, [isConnected, sendSyncEvent]);
-
-  // ------------------------------------------------------
+  }, [matchId, userId]);
 
   useEffect(() => {
     if (!matchId || !userId) return;
@@ -177,14 +107,79 @@ const MatchMastersGame = () => {
           setEngineReady(true); 
         }
 
-        // Le hook gère toute la connexion WebSocket (SockJS, Client, Subscribe...)
+        // FIX LAN : On utilise l'IP de la machine locale
+        const currentHost = window.location.hostname;
+        const socket = new SockJS(`http://${currentHost}:8080/ws-arcade`);
+        const client = new Client({
+          webSocketFactory: () => socket,
+          onConnect: () => {
+            client.subscribe(`/topic/game/${matchId}`, (message) => {
+              const move = JSON.parse(message.body);
+              if (move.playerId.toString() === userId) return; 
+
+              try {
+                  const data = JSON.parse(move.role);
+                  
+                  if (isHostRef.current) {
+                      if (data.action === 'HELLO') {
+                          if (!isInitRef.current) {
+                              sendSync();
+                          }
+                      }
+                      else if (data.action === 'SWAP') {
+                          if (currentTurnRef.current === 'player2' && !isResolvingRef.current) {
+                              const c1 = boardRef.current[data.idx1];
+                              const c2 = boardRef.current[data.idx2];
+                              boardRef.current[data.idx1] = c2;
+                              boardRef.current[data.idx2] = c1;
+                              isResolvingRef.current = true;
+                              sendSync(); 
+                          }
+                      }
+                  } else {
+                      if (data.action === 'SYNC') {
+                          p1HealthRef.current = data.p1;
+                          p2HealthRef.current = data.p2;
+                          currentTurnRef.current = data.turn;
+
+                          isResolvingRef.current = false;
+                          setIsMyTurnBlocked(data.turn !== myRoleRef.current);
+
+                          setP1Health(data.p1);
+                          setP2Health(data.p2);
+                          setCurrentTurn(data.turn);
+                          
+                          const newBoard = data.board.split('').map(char => REVERSE_MAP[char]);
+                          boardRef.current = newBoard;
+                          setCurrentBoard(newBoard);
+                          
+                          if (data.p1 <= 0 || data.p2 <= 0) {
+                              endGame(data.p1 <= 0 ? 'player2' : 'player1');
+                          }
+                      }
+                  }
+              } catch(e) { console.error("Erreur lecture réseau", e); }
+            });
+
+            if (!host) {
+               client.publish({
+                 destination: '/app/game.move',
+                 body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: 0, role: JSON.stringify({ action: 'HELLO' }) })
+               });
+            }
+          }
+        });
+
+        client.activate();
+        stompClientRef.current = client;
+
       } catch (err) { console.error("Erreur :", err); }
     };
 
     initGame();
-  }, [matchId, userId]);
+    return () => { if (stompClientRef.current) stompClientRef.current.deactivate(); };
+  }, [matchId, userId, sendSync, endGame]);
 
-  // LE MOTEUR DE JEU (Tourne uniquement chez l'hôte)
   useEffect(() => {
     if (!engineReady || !isHostRef.current) return;
 
@@ -293,9 +288,11 @@ const MatchMastersGame = () => {
             isResolvingRef.current = true;
             sendSync();
         } else {
-            if (isConnected) {
-                // Le joueur 2 envoie une demande de swap avec les index concernés
-                sendSyncEvent('SWAP', { idx1: selectedIndex, idx2: index });
+            if (stompClientRef.current) {
+                stompClientRef.current.publish({
+                  destination: '/app/game.move',
+                  body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: 0, role: JSON.stringify({ action: 'SWAP', idx1: selectedIndex, idx2: index }) })
+                });
                 setIsMyTurnBlocked(true);
             }
         }
@@ -317,7 +314,7 @@ const MatchMastersGame = () => {
         <h1>Match Masters - DUEL</h1>
 
         <h2 style={{ textAlign: 'center', padding: '10px', borderRadius: '10px', backgroundColor: currentTurn === myRole ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)', color: currentTurn === myRole ? '#2ecc71' : '#e74c3c' }}>
-          {currentTurn === myRole ? "🟢 C'EST VOTRE TOUR" : "🔴 TOUR DE L'ADVERSAIRE"}
+          {currentTurn === myRole ? "C'EST VOTRE TOUR" : "TOUR DE L'ADVERSAIRE"}
         </h2>
         
         <div className="health-arena" style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', width: '100%', maxWidth: '500px', marginTop: '10px' }}>
@@ -358,9 +355,9 @@ const MatchMastersGame = () => {
       {gameOver && (
         <div className="game-over-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <h2 style={{ fontSize: '40px', color: matchResult === 'victory' ? '#2ecc71' : '#e74c3c' }}>
-            {matchResult === 'victory' ? '🏆 VICTOIRE !' : '💀 K.O.'}
+            {matchResult === 'victory' ? 'VICTOIRE !' : 'K.O.'}
           </h2>
-          <button onClick={() => navigate('/lobby')} className="btn-secondary" style={{ padding: '15px 30px', fontSize: '18px', marginTop: '20px' }}>Retour au QG (Lobby)</button>
+          <button onClick={() => navigate('/lobby')} className="btn-secondary" style={{ padding: '15px 30px', fontSize: '18px', marginTop: '20px' }}>Retour au Lobby</button>
         </div>
       )}
     </div>

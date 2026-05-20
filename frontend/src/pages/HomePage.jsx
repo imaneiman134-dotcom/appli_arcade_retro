@@ -59,6 +59,8 @@ function HomePage() {
       <div className="games-grid">
         {jeux.map((jeu) => {
           const route = GAME_ROUTES[jeu.titre];
+          const isAsteroid = jeu.titre === 'Asteroid Duel';
+
           return (
             <div key={jeu.id} className="game-card">
               <h3>{jeu.titre}</h3>
@@ -80,17 +82,21 @@ function HomePage() {
                 )}
               </div>
               <div className="game-actions">
-                <button 
-                  onClick={() => route && navigate(`/game/${route}/${jeu.id}`)}
-                  className="btn-play"
-                >
-                  JOUER
-                </button>
+                {isAsteroid && (
+                  <button 
+                    onClick={() => route && navigate(`/game/${route}/${jeu.id}`)}
+                    className="btn-play"
+                  >
+                    JOUER
+                  </button>
+                )}
+
                 <button 
                   onClick={() => navigate('/lobby')}
                   className="btn-challenge"
+                  style={!isAsteroid ? { width: '100%', padding: '12px', fontSize: '1rem', fontWeight: 'bold' } : {}}
                 >
-                  DEFIER
+                  {isAsteroid ? "DEFIER" : "DEFIER UN JOUEUR"}
                 </button>
               </div>
             </div>
