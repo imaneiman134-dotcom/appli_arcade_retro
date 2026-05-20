@@ -4,9 +4,8 @@ public class GenericSyncMessage {
     
     private Long senderId;
     private String actionType;
-    private Object payload; // Object permet d'accepter n'importe quel format JSON
+    private Object payload; 
 
-    // Constructeurs
     public GenericSyncMessage() {
     }
 
@@ -16,7 +15,6 @@ public class GenericSyncMessage {
         this.payload = payload;
     }
 
-    // Getters et Setters
     public Long getSenderId() {
         return senderId;
     }

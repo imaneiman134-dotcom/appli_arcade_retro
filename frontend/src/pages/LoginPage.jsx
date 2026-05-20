@@ -12,7 +12,6 @@ function LoginPage() {
     e.preventDefault();
     try {
       const response = await utilisateurService.login(pseudo, motDePasse);
-      // Stocker le token ou l'ID utilisateur
       localStorage.setItem('userId', response.data.id);
       localStorage.setItem('userPseudo', response.data.pseudo);
       navigate('/');
@@ -40,7 +39,7 @@ function LoginPage() {
         <button type="submit">Se connecter</button>
       </form>
       {error && <p className="error">{error}</p>}
-      <p>Pas encore inscrit ? <a href="/register">S'inscrire</a></p>
+      <p>Pas encore inscrit? <a href="/register">S'inscrire</a></p>
     </div>
   );
 }

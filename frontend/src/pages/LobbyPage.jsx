@@ -41,7 +41,6 @@ const LobbyPage = () => {
         stompClient.subscribe(`/topic/invitations/${userId}`, (message) => {
           console.log('Notification reçue:', message.body);
           
-          // Vérifier si c'est un démarrage de match
           if (message.body.startsWith("MATCH_START:")) {
              const parts = message.body.split(":");
              const matchId = parts[1];
@@ -111,20 +110,17 @@ const LobbyPage = () => {
       setTimeout(() => setSuccessMessage(''), 3000);
       fetchData();
     } catch (err) {
-      // On logge l'erreur complète dans la console pour enquêter
       console.error("Erreur brute Axios :", err);
       console.log("Données renvoyées par le backend :", err.response?.data);
 
       const backendData = err.response?.data;
       let errorMessage = 'Impossible d\'envoyer l\'invitation. Vérifiez le pseudo.';
 
-      // On analyse ce que le backend a vraiment répondu
       if (!err.response) {
         errorMessage = "Erreur réseau : le serveur est injoignable ou bloque la requête (CORS).";
       } else if (typeof backendData === 'string' && backendData.length > 0) {
         errorMessage = backendData;
       } else if (backendData && typeof backendData === 'object' && backendData.message) {
-        // Si Spring renvoie un objet d'erreur standard
         errorMessage = `Erreur serveur: ${backendData.message}`;
       }
 
@@ -136,7 +132,6 @@ const LobbyPage = () => {
     try {
       const res = await invitationService.acceptInvitation(invitationId);
       const match = res.data;
-      // Le match retourné contient jeu.id et jeu.titre
       const jeuTitre = match.jeu?.titre;
       const route = getGameRoute(jeuTitre);
       navigate(`/game/${route}/${match.jeu?.id}?matchId=${match.id}`);

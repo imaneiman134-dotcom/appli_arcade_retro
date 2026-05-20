@@ -17,11 +17,11 @@ public class MatchMastersMatch {
     private Long player2Id;
     private Integer player1Score;
     private Integer player2Score;
-    private Integer currentTurn; // 1 or 2
+    private Integer currentTurn; 
     private Integer maxTurns;
-    private String status; // PENDING, IN_PROGRESS, COMPLETED
+    private String status;
     private Long winnerId;
-    private String boardState; // JSON representation of the board
+    private String boardState; 
     private LocalDateTime createdAt;
     private LocalDateTime finishedAt;
 
@@ -41,7 +41,6 @@ public class MatchMastersMatch {
     }
 
     private String initializeBoardState() {
-        // Initialize empty board (6x6 grid)
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 36; i++) {
             sb.append("0");
@@ -49,7 +48,6 @@ public class MatchMastersMatch {
         return sb.toString();
     }
 
-    // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

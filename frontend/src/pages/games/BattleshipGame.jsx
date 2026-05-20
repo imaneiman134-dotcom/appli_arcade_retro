@@ -11,7 +11,6 @@ const BattleshipGame = () => {
   const matchId = searchParams.get('matchId');
   const navigate = useNavigate();
   
-  // États du jeu
   const [phase, setPhase] = useState('setup');
   const [myGrid, setMyGrid] = useState(Array(10).fill(null).map(() => Array(10).fill(null)));
   const [opponentGrid, setOpponentGrid] = useState(Array(10).fill(null).map(() => Array(10).fill(null)));
@@ -20,7 +19,6 @@ const BattleshipGame = () => {
   const [currentShipIndex, setCurrentShipIndex] = useState(0);
   const [orientation, setOrientation] = useState('horizontal'); 
   
-  // Multijoueur
   const [matchData, setMatchData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [stompClient, setStompClient] = useState(null);
@@ -57,7 +55,6 @@ const BattleshipGame = () => {
         else if (match.player2?.id.toString() === userId) role = 'player2';
         setPlayerRole(role);
 
-        // FIX LAN : On utilise l'IP de la machine locale
         const currentHost = window.location.hostname;
         const socket = new SockJS(`http://${currentHost}:8080/ws-arcade`);
         const client = new Client({
@@ -231,8 +228,8 @@ const BattleshipGame = () => {
           <h2>Déploiement de la flotte</h2>
           <p>Placez votre navire de taille <strong>{shipsToPlace[currentShipIndex]}</strong></p>
           <div className="orientation-controls">
-            <button className={`btn-orientation ${orientation === 'horizontal' ? 'active' : ''}`} onClick={() => setOrientation('horizontal')}>→ Horizontal</button>
-            <button className={`btn-orientation ${orientation === 'vertical' ? 'active' : ''}`} onClick={() => setOrientation('vertical')}>↓ Vertical</button>
+            <button className={`btn-orientation ${orientation === 'horizontal' ? 'active' : ''}`} onClick={() => setOrientation('horizontal')}>Horizontal</button>
+            <button className={`btn-orientation ${orientation === 'vertical' ? 'active' : ''}`} onClick={() => setOrientation('vertical')}>Vertical</button>
           </div>
           <div className="ocean-grid">
             {myGrid.map((row, rIdx) => row.map((cell, cIdx) => (

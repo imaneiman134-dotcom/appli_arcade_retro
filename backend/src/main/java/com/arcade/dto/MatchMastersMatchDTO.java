@@ -31,7 +31,6 @@ public class MatchMastersMatchDTO {
         this.boardState = boardState;
     }
 
-    // Getters and Setters
     public Long getMatchId() { return matchId; }
     public void setMatchId(Long matchId) { this.matchId = matchId; }
 

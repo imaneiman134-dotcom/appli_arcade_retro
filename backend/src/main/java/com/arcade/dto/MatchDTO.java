@@ -16,7 +16,6 @@ public class MatchDTO {
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
 
-    // Constructeurs
     public MatchDTO() {}
 
     public MatchDTO(Long id, Long jeuId, String jeuTitre, Long player1Id, String player1Pseudo, 
@@ -36,7 +35,6 @@ public class MatchDTO {
         this.finishedAt = finishedAt;
     }
 
-    // Getters et Setters
     public Long getId() {
         return id;
     }

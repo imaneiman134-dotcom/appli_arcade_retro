@@ -23,7 +23,6 @@ public class GenericRealtimeController {
             @Payload GenericSyncMessage message,
             SimpMessageHeaderAccessor headerAccessor) {
         
-        // Blindly broadcast the state to all subscribers of this match
         messagingTemplate.convertAndSend("/topic/match/" + matchId + "/sync", message);
     }
 }

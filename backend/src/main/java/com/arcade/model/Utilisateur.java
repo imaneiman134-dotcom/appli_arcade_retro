@@ -21,7 +21,6 @@ public class Utilisateur {
         this.motDePasse = motDePasse;
     }
 
-    // Getters et Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

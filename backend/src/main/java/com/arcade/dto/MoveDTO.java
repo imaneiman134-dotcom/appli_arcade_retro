@@ -4,9 +4,8 @@ public class MoveDTO {
     private Long matchId;
     private Long playerId;
     private int position;
-    private String role; // "X" ou "O"
+    private String role; 
 
-    // Constructeurs
     public MoveDTO() {}
 
     public MoveDTO(Long matchId, Long playerId, int position, String role) {
@@ -16,7 +15,6 @@ public class MoveDTO {
         this.role = role;
     }
 
-    // Getters et Setters
     public Long getMatchId() { return matchId; }
     public void setMatchId(Long matchId) { this.matchId = matchId; }
 

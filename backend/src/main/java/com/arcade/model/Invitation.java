@@ -43,7 +43,6 @@ public class Invitation {
 
     private LocalDateTime declinedAt;
 
-    // Constructeurs
     public Invitation() {
         this.createdAt = LocalDateTime.now();
         this.status = InvitationStatus.PENDING;
@@ -57,7 +56,6 @@ public class Invitation {
         this.status = InvitationStatus.PENDING;
     }
 
-    // Getters et Setters
     public Long getId() {
         return id;
     }

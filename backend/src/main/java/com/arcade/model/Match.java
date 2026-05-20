@@ -35,7 +35,6 @@ public class Match {
 
     private LocalDateTime finishedAt;
 
-    // Constructeurs
     public Match() {
         this.createdAt = LocalDateTime.now();
         this.status = MatchStatus.PENDING;
@@ -49,7 +48,6 @@ public class Match {
         this.status = MatchStatus.PENDING;
     }
 
-    // Getters et Setters
     public Long getId() {
         return id;
     }

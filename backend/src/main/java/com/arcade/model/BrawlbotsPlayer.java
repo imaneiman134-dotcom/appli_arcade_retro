@@ -5,12 +5,12 @@ import javax.persistence.Embeddable;
 @Embeddable
 public class BrawlbotsPlayer {
     private Long userId;
-    private String botType; // ELDRITCH, NANO, RAPTOR
+    private String botType; 
     private Integer health;
     private Integer maxHealth;
     private Boolean isAlive;
     private Integer score;
-    private String lastAction; // ATTACK, DEFEND, SPECIAL, JUMP
+    private String lastAction; 
 
     public BrawlbotsPlayer() {}
 
@@ -23,7 +23,6 @@ public class BrawlbotsPlayer {
         this.score = 0;
     }
 
-    // Getters and Setters
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
 

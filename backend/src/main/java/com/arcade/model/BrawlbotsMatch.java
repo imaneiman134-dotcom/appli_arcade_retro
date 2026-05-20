@@ -16,7 +16,7 @@ public class BrawlbotsMatch {
     private Jeu jeu;
 
     private Integer maxPlayers;
-    private String status; // PENDING, IN_PROGRESS, COMPLETED
+    private String status;
     private Integer currentRound;
     private Integer maxRounds;
     private Long winnerId;
@@ -38,7 +38,6 @@ public class BrawlbotsMatch {
         this.createdAt = LocalDateTime.now();
     }
 
-    // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 

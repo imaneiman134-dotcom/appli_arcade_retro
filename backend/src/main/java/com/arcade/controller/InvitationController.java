@@ -30,7 +30,6 @@ public class InvitationController {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
-    // Convertit Invitation -> InvitationDTO pour éviter les cycles de sérialisation JSON
     private InvitationDTO toDTO(Invitation inv) {
         return new InvitationDTO(
             inv.getId(),
@@ -55,13 +54,11 @@ public class InvitationController {
             Invitation invitation = invitationService.sendInvitation(senderId, receiverPseudo, jeuId);
             InvitationDTO dto = toDTO(invitation);
 
-            // Notifier le destinataire via WebSocket
             Long receiverId = invitation.getReceiver().getId();
             messagingTemplate.convertAndSend("/topic/invitations/" + receiverId, "nouvelle_invitation");
 
             return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
-            // Retourner le message d'erreur précis au lieu de null
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
@@ -88,7 +85,6 @@ public class InvitationController {
             if (match.getPlayer1() != null) {
                 Long senderId = match.getPlayer1().getId(); 
                 
-                // On envoie une chaîne formatée : "MATCH_START:matchId:jeuId:jeuTitre"
                 String message = "MATCH_START:" + match.getId() + ":" + match.getJeu().getId() + ":" + match.getJeu().getTitre();
                 messagingTemplate.convertAndSend("/topic/invitations/" + senderId, message);
             }

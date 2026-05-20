@@ -15,10 +15,8 @@ public class GameController {
         this.messagingTemplate = messagingTemplate;
     }
 
-    // Le frontend enverra ses messages à "/app/game.move"
     @MessageMapping("/game.move")
     public void processMove(@Payload MoveDTO move) {
-        // Le serveur reçoit le coup et le diffuse immédiatement sur le "topic" du match spécifique
         messagingTemplate.convertAndSend("/topic/game/" + move.getMatchId(), move);
     }
 }

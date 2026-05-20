@@ -14,7 +14,6 @@ public class InvitationDTO {
     private LocalDateTime createdAt;
     private LocalDateTime acceptedAt;
 
-    // Constructeurs
     public InvitationDTO() {}
 
     public InvitationDTO(Long id, String senderPseudo, Long senderId, String receiverPseudo, Long receiverId, 
@@ -31,7 +30,6 @@ public class InvitationDTO {
         this.acceptedAt = acceptedAt;
     }
 
-    // Getters et Setters
     public Long getId() {
         return id;
     }

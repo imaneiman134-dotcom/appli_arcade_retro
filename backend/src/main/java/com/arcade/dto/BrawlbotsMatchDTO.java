@@ -24,7 +24,7 @@ public class BrawlbotsMatchDTO {
         this.winnerId = winnerId;
     }
 
-    // Getters and Setters
+    // getters and setters
     public Long getMatchId() { return matchId; }
     public void setMatchId(Long matchId) { this.matchId = matchId; }
 

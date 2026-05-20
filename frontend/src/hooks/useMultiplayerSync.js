@@ -22,7 +22,6 @@ export const useMultiplayerSync = (matchId, userId, authToken, onMessageReceived
         client.subscribe(`/topic/match/${matchId}/sync`, (message) => {
           try {
             const parsedMessage = JSON.parse(message.body);
-            // Ignore messages sent by ourselves (optional, but usually good for avoiding echo loops)
             if (parsedMessage.senderId !== Number(userId)) {
                 if (onMessageReceived) {
                     onMessageReceived(parsedMessage);

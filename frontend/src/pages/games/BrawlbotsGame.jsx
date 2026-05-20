@@ -175,7 +175,6 @@ const BrawlbotsGame = () => {
       </div>
 
       <div className="battlefield">
-        {/* MON ROBOT */}
         <div className={`bot-container left ${myEffect === 'ATTACK' ? 'attacking' : ''}`}>
           <div className="health-bar-container" style={{ border: '2px solid white', width: '100%', height: '25px', backgroundColor: '#333', position: 'relative', borderRadius: '5px', overflow: 'hidden' }}>
             <div className="health-bar" style={{ width: `${myHealth}%`, backgroundColor: myHealth > 30 ? '#2ecc71' : '#e74c3c', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>
@@ -207,7 +206,6 @@ const BrawlbotsGame = () => {
 
         <div className="vs-badge">VS</div>
 
-        {/* ROBOT ADVERSE */}
         <div className={`bot-container right ${opponentEffect === 'ATTACK' ? 'attacking' : ''}`}>
           <div className="health-bar-container" style={{ border: '2px solid white', width: '100%', height: '25px', backgroundColor: '#333', position: 'relative', borderRadius: '5px', overflow: 'hidden' }}>
             <div className="health-bar" style={{ width: `${opponentHealth}%`, backgroundColor: opponentHealth > 30 ? '#e67e22' : '#e74c3c', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>

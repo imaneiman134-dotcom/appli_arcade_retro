@@ -13,18 +13,15 @@ const AsteroidDuelGame = () => {
   const [player1Score, setPlayer1Score] = useState(0);
   const [player2Score, setPlayer2Score] = useState(0);
 
-  // Utilisation de useRef pour des performances fluides (60 FPS) sans bloquer React
   const keys = useRef({});
   const p1Ref = useRef({ x: 50, y: 250, width: 30, height: 30, health: 100, bullets: [], lastShot: 0 });
   const p2Ref = useRef({ x: 720, y: 250, width: 30, height: 30, health: 100, bullets: [], lastShot: 0 });
   const asteroidsRef = useRef([]);
 
-  // 1. Écouteurs d'événements du clavier
   useEffect(() => {
     const handleKeyDown = (e) => { 
       keys.current[e.key.toLowerCase()] = true; 
       keys.current[e.key] = true; 
-      // Empêche le scrolling de la page avec Espace ou les flèches
       if(["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) > -1) {
           e.preventDefault();
       }
@@ -54,16 +51,16 @@ const AsteroidDuelGame = () => {
       const now = Date.now();
       const speed = 5;
       const bulletSpeed = 10;
-      const fireRate = 300; // Millisecondes entre chaque tir
+      const fireRate = 300;
 
       if (keys.current['z']) p1Ref.current.y = Math.max(0, p1Ref.current.y - speed);
       if (keys.current['s']) p1Ref.current.y = Math.min(canvas.height - 30, p1Ref.current.y + speed);
       if (keys.current['q']) p1Ref.current.x = Math.max(0, p1Ref.current.x - speed);
-      if (keys.current['d']) p1Ref.current.x = Math.min(canvas.width / 2 - 30, p1Ref.current.x + speed); // Bloqué à la moitié gauche
+      if (keys.current['d']) p1Ref.current.x = Math.min(canvas.width / 2 - 30, p1Ref.current.x + speed);
 
       if (keys.current['arrowup']) p2Ref.current.y = Math.max(0, p2Ref.current.y - speed);
       if (keys.current['arrowdown']) p2Ref.current.y = Math.min(canvas.height - 30, p2Ref.current.y + speed);
-      if (keys.current['arrowleft']) p2Ref.current.x = Math.max(canvas.width / 2, p2Ref.current.x - speed); // Bloqué à la moitié droite
+      if (keys.current['arrowleft']) p2Ref.current.x = Math.max(canvas.width / 2, p2Ref.current.x - speed); 
       if (keys.current['arrowright']) p2Ref.current.x = Math.min(canvas.width - 30, p2Ref.current.x + speed);
 
       if (keys.current[' '] && now - p1Ref.current.lastShot > fireRate) {
@@ -85,7 +82,6 @@ const AsteroidDuelGame = () => {
       asteroidsRef.current.forEach(ast => {
         ast.x += ast.vx;
         ast.y += ast.vy;
-        // Rebond sur les bords de l'écran
         if (ast.x < 0 || ast.x > canvas.width) ast.vx *= -1;
         if (ast.y < 0 || ast.y > canvas.height) ast.vy *= -1;
       });

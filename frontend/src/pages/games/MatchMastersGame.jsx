@@ -107,7 +107,6 @@ const MatchMastersGame = () => {
           setEngineReady(true); 
         }
 
-        // FIX LAN : On utilise l'IP de la machine locale
         const currentHost = window.location.hostname;
         const socket = new SockJS(`http://${currentHost}:8080/ws-arcade`);
         const client = new Client({

@@ -10,7 +10,7 @@ public class BrawlBot {
     private Long id;
 
     private String name;
-    private String type; // ELDRITCH, NANO, RAPTOR
+    private String type; 
     private Integer maxHealth;
     private Integer currentHealth;
     private Integer attack;
@@ -33,7 +33,6 @@ public class BrawlBot {
         this.specialAbility2 = specialAbility2;
     }
 
-    // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
