@@ -24,8 +24,8 @@ const BattleshipGame = () => {
   const [matchData, setMatchData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [stompClient, setStompClient] = useState(null);
-  const [playerRole, setPlayerRole] = useState(null);
-  const [currentPlayer, setCurrentPlayer] = useState('player1'); // player1 commence toujours
+  const [playerRole, setPlayerRole] = useState(null); 
+  const [currentPlayer, setCurrentPlayer] = useState('player1'); // player1 tire en premier
   
   const [myReady, setMyReady] = useState(false);
   const [opponentReady, setOpponentReady] = useState(false);
@@ -36,7 +36,12 @@ const BattleshipGame = () => {
   const userId = localStorage.getItem('userId');
 
   const myGridRef = useRef(myGrid);
+  const phaseRef = useRef(phase);
+  const myReadyRef = useRef(myReady);
+  
   useEffect(() => { myGridRef.current = myGrid; }, [myGrid]);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { myReadyRef.current = myReady; }, [myReady]);
 
   useEffect(() => {
     if (!matchId || !userId) return;
@@ -52,7 +57,6 @@ const BattleshipGame = () => {
         else if (match.player2?.id.toString() === userId) role = 'player2';
         setPlayerRole(role);
 
-        // Connexion WebSocket
         const currentHost = window.location.hostname;
         const socket = new SockJS(`http://${currentHost}:8080/ws-arcade`);
         const client = new Client({
@@ -61,7 +65,7 @@ const BattleshipGame = () => {
             console.log(`Connecté à la Bataille Navale (Match ${matchId})`);
             client.subscribe(`/topic/game/${matchId}`, (message) => {
               const move = JSON.parse(message.body);
-              handleNetworkMessage(move.position, move.role, move.playerId);
+              handleNetworkMessage(move.position, move.role, move.playerId, client);
             });
           }
         });
@@ -85,18 +89,27 @@ const BattleshipGame = () => {
     }
   }, [myReady, opponentReady, phase]);
 
-  const handleNetworkMessage = (position, action, senderId) => {
+  const handleNetworkMessage = (position, action, senderId, activeClient) => {
     const row = Math.floor(position / 10);
     const col = position % 10;
 
     if (action === 'READY' && senderId.toString() !== userId) {
       setOpponentReady(true);
+      
+      if (myReadyRef.current && phaseRef.current === 'waiting') {
+        activeClient.publish({
+          destination: '/app/game.move',
+          body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: -1, role: 'READY' })
+        });
+      }
     } 
     else if (action === 'ATTACK' && senderId.toString() !== userId) {
+      if (phaseRef.current === 'waiting') setPhase('play');
+
       const cell = myGridRef.current[row][col];
       const isHit = cell !== null && cell.includes('ship');
 
-      stompClient.publish({
+      activeClient.publish({
         destination: '/app/game.move',
         body: JSON.stringify({
           matchId: parseInt(matchId),
@@ -107,9 +120,7 @@ const BattleshipGame = () => {
       });
     } 
     else if (action === 'HIT' || action === 'MISS') {
-      // 🎯 RÉCEPTION D'UN RÉSULTAT DE TIR
       if (senderId.toString() !== userId) {
-        // C'est le résultat de MON attaque sur lui
         setOpponentGrid(prev => {
           const newGrid = prev.map(r => [...r]);
           newGrid[row][col] = action === 'HIT' ? 'hit' : 'miss';
@@ -134,7 +145,7 @@ const BattleshipGame = () => {
         if (action === 'HIT') setOpponentHits(prev => prev + 1);
       }
       
-      // On passe au tour du joueur suivant
+      // Changement de tour
       setCurrentPlayer(prev => prev === 'player1' ? 'player2' : 'player1');
     }
   };
@@ -143,13 +154,12 @@ const BattleshipGame = () => {
     setPhase('finished');
     if (status === 'victory') {
       try {
-        await scoreService.saveScore(parseInt(userId), parseInt(jeuId), 50); // 50 pts pour victoire
+        await scoreService.saveScore(parseInt(userId), parseInt(jeuId), 50); 
         await matchService.setMatchWinner(matchId, userId);
       } catch(e) { console.error(e); }
     }
   };
 
- 
   const handleCellClick = (row, col) => {
     // Phase de Placement
     if (phase === 'setup') {
@@ -176,20 +186,24 @@ const BattleshipGame = () => {
       setMyGrid(newGrid);
       setCurrentShipIndex(currentShipIndex + 1);
       
-      // Si j'ai posé le dernier bateau
       if (currentShipIndex + 1 === shipsToPlace.length) {
         setMyReady(true);
         setPhase('waiting');
-        stompClient.publish({
-          destination: '/app/game.move',
-          body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: -1, role: 'READY' })
-        });
+        
+        if (stompClient && stompClient.connected) {
+            stompClient.publish({
+            destination: '/app/game.move',
+            body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: -1, role: 'READY' })
+            });
+        }
       }
     } 
     // Phase d'Attaque
     else if (phase === 'play') {
-      // Interdit de jouer si ce n'est pas mon tour ou si j'ai déjà tiré ici
-      if (currentPlayer !== playerRole) return;
+      if (currentPlayer !== playerRole) {
+          console.log("Ce n'est pas votre tour de jouer !");
+          return;
+      }
       if (opponentGrid[row][col] === 'hit' || opponentGrid[row][col] === 'miss') return; 
 
       stompClient.publish({
@@ -214,7 +228,6 @@ const BattleshipGame = () => {
         <p>Amiral : <strong style={{ color: '#3498db' }}>{playerRole === 'player1' ? player1Name : player2Name}</strong></p>
       </div>
 
-      {/* PHASE 1 : PLACEMENT */}
       {phase === 'setup' && (
         <div className="tactical-panel">
           <h2>Déploiement de la flotte</h2>
@@ -231,7 +244,6 @@ const BattleshipGame = () => {
         </div>
       )}
 
-      {/* PHASE 2 : ATTENTE DE L'ADVERSAIRE */}
       {phase === 'waiting' && (
         <div className="tactical-panel" style={{ textAlign: 'center', padding: '40px' }}>
           <h2>Flotte déployée !</h2>
@@ -239,7 +251,6 @@ const BattleshipGame = () => {
         </div>
       )}
 
-      {/* PHASE 3 : COMBAT */}
       {phase === 'play' && (
         <div className="tactical-panel" style={{ display: 'flex', justifyContent: 'center', gap: '40px', flexWrap: 'wrap' }}>
           
@@ -248,7 +259,7 @@ const BattleshipGame = () => {
               color: currentPlayer === playerRole ? '#2ecc71' : '#e74c3c',
               padding: '10px', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '10px'
             }}>
-              {currentPlayer === playerRole ? "🎯 À VOUS DE TIRER !" : "🛡️ L'ENNEMI VISE..."}
+              {currentPlayer === playerRole ? "À VOUS DE TIRER !" : "L'ENNEMI VISE..."}
             </h2>
           </div>
 
@@ -280,10 +291,9 @@ const BattleshipGame = () => {
         </div>
       )}
 
-      {/* PHASE 4 : FIN DU JEU */}
       {phase === 'finished' && (
         <div className="victory-screen" style={{ textAlign: 'center', marginTop: '20px' }}>
-          <h2>{myHits >= 17 ? '🏆 VICTOIRE ! Flotte ennemie anéantie.' : '💀 DÉFAITE. Votre flotte a coulé.'}</h2>
+          <h2>{myHits >= 17 ? 'VICTOIRE ! Flotte ennemie anéantie.' : 'DÉFAITE. Votre flotte a coulé.'}</h2>
           <button onClick={() => navigate('/lobby')} className="btn-secondary" style={{ marginTop: '20px' }}>Retourner au QG (Lobby)</button>
         </div>
       )}
