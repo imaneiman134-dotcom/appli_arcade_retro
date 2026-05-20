@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+// IMPORT DU NOUVEAU HOOK (Ajustez le chemin selon l'arborescence de votre projet)
+import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
 import './brawlbots.css';
 
 const BrawlbotsGame = () => {
@@ -14,13 +14,13 @@ const BrawlbotsGame = () => {
   // États de la partie
   const [loading, setLoading] = useState(true);
   const [matchData, setMatchData] = useState(null);
-  const [stompClient, setStompClient] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [roundMessage, setRoundMessage] = useState("Choisissez votre action !");
   const [isAnimating, setIsAnimating] = useState(false);
 
   // Mon profil
   const userId = localStorage.getItem('userId');
+  const authToken = localStorage.getItem('authToken'); // Ajout pour la sécurité WebSocket
   const [myName, setMyName] = useState("Vous");
   const [myHealth, setMyHealth] = useState(100);
   const [myAction, setMyAction] = useState(null);
@@ -33,10 +33,29 @@ const BrawlbotsGame = () => {
   const [opponentEffect, setOpponentEffect] = useState(null);
   const [opponentHasPlayed, setOpponentHasPlayed] = useState(false);
 
+  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
+  const handleMessageReceived = (message) => {
+    const action = message.actionType;
+    
+    // Le hook filtre déjà nos propres messages, donc on sait que ça vient de l'adversaire
+    if (action === 'ATTACK' || action === 'DEFEND') {
+      setOpponentAction(action);
+      setOpponentHasPlayed(true);
+    }
+  };
+
+  const { isConnected, sendSyncEvent } = useMultiplayerSync(
+    matchId,
+    userId,
+    authToken,
+    handleMessageReceived
+  );
+  // ------------------------------------------------------
+
   useEffect(() => {
     if (!matchId || !userId) return;
 
-    const fetchMatchDataAndConnect = async () => {
+    const fetchMatchData = async () => {
       try {
         const res = await matchService.getMatch(matchId);
         const match = res.data;
@@ -50,23 +69,6 @@ const BrawlbotsGame = () => {
           setOpponentName(match.player1?.pseudo || "Joueur 1");
         }
 
-        const currentHost = window.location.hostname;
-        const socketUrl = `http://${currentHost}:8080/ws-arcade`;
-        const socket = new SockJS(socketUrl);
-        
-        const client = new Client({
-          webSocketFactory: () => socket,
-          onConnect: () => {
-            console.log(`Connecté à Brawlbots (Match ${matchId})`);
-            client.subscribe(`/topic/game/${matchId}`, (message) => {
-              const move = JSON.parse(message.body);
-              handleNetworkMessage(move.role, move.playerId);
-            });
-          }
-        });
-
-        client.activate();
-        setStompClient(client);
         setLoading(false);
 
       } catch (err) {
@@ -75,17 +77,9 @@ const BrawlbotsGame = () => {
       }
     };
 
-    fetchMatchDataAndConnect();
-
-    return () => { if (stompClient) stompClient.deactivate(); };
+    fetchMatchData();
+    // Plus besoin d'initialiser manuellement SockJS, le hook s'en occupe !
   }, [matchId, userId]);
-
-  const handleNetworkMessage = (action, senderId) => {
-    if (senderId.toString() !== userId) {
-      setOpponentAction(action);
-      setOpponentHasPlayed(true);
-    }
-  };
 
   useEffect(() => {
     if (myAction && opponentAction && !isAnimating && !gameOver) {
@@ -102,19 +96,15 @@ const BrawlbotsGame = () => {
   const handleActionClick = (actionType) => {
     if (isAnimating || myAction || gameOver) return;
     
+    // 1. Enregistre l'action localement
     setMyAction(actionType);
     setRoundMessage(opponentHasPlayed ? "Résolution imminente..." : "En attente de l'adversaire...");
     
-    if (stompClient && stompClient.connected) {
-      stompClient.publish({
-        destination: '/app/game.move',
-        body: JSON.stringify({
-          matchId: parseInt(matchId),
-          playerId: parseInt(userId),
-          position: 0,
-          role: actionType
-        })
-      });
+    // 2. Envoie l'action à l'adversaire via le hook
+    if (isConnected) {
+      sendSyncEvent(actionType, {}); 
+    } else {
+      console.warn("Attente de connexion réseau...");
     }
   };
 
@@ -145,7 +135,9 @@ const BrawlbotsGame = () => {
       setOpponentHasPlayed(false);
       
       setIsAnimating(false);
-      setRoundMessage("Nouveau round ! Choisissez une action.");
+      if (myHealth - myDmgTaken > 0 && opponentHealth - oppDmgTaken > 0) {
+          setRoundMessage("Nouveau round ! Choisissez une action.");
+      }
     }, 2000); 
   };
 
@@ -181,7 +173,6 @@ const BrawlbotsGame = () => {
         {/* MON BOT (GAUCHE) */}
         <div className={`bot-container left ${myEffect === 'ATTACK' ? 'attacking' : ''}`}>
           
-          {/* NOUVELLE BARRE DE VIE AVEC TEXTE */}
           <div className="health-bar-container" style={{ border: '2px solid white', width: '100%', height: '25px', backgroundColor: '#333', position: 'relative', borderRadius: '5px', overflow: 'hidden' }}>
             <div className="health-bar" style={{ width: `${myHealth}%`, backgroundColor: myHealth > 30 ? '#2ecc71' : '#e74c3c', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>
             <span style={{ position: 'absolute', top: '2px', left: '50%', transform: 'translateX(-50%)', color: 'white', fontWeight: 'bold', textShadow: '1px 1px 2px black', fontSize: '14px' }}>
@@ -202,7 +193,6 @@ const BrawlbotsGame = () => {
         {/* BOT ADVERSE (DROITE) */}
         <div className={`bot-container right ${opponentEffect === 'ATTACK' ? 'attacking' : ''}`}>
           
-          {/* NOUVELLE BARRE DE VIE AVEC TEXTE */}
           <div className="health-bar-container" style={{ border: '2px solid white', width: '100%', height: '25px', backgroundColor: '#333', position: 'relative', borderRadius: '5px', overflow: 'hidden' }}>
             <div className="health-bar" style={{ width: `${opponentHealth}%`, backgroundColor: opponentHealth > 30 ? '#e67e22' : '#e74c3c', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>
             <span style={{ position: 'absolute', top: '2px', left: '50%', transform: 'translateX(-50%)', color: 'white', fontWeight: 'bold', textShadow: '1px 1px 2px black', fontSize: '14px' }}>

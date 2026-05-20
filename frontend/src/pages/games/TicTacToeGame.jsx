@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { scoreService } from '../../services/api';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+import { scoreService, matchService } from '../../services/api';
+// IMPORT DU NOUVEAU HOOK
+import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
 
 const WIN_LINES = [
   [0,1,2],[3,4,5],[6,7,8],
@@ -23,61 +23,61 @@ export default function TicTacToeGame() {
   const [result, setResult] = useState('');
   const [currentPlayer, setCurrentPlayer] = useState('X'); // X commence toujours
   
-  // Nouveaux états pour le multijoueur
   const [playerRole, setPlayerRole] = useState(null); // 'X' (Joueur 1) ou 'O' (Joueur 2)
-  const [stompClient, setStompClient] = useState(null);
 
   const { jeuId } = useParams();
   const [searchParams] = useSearchParams();
   const matchId = searchParams.get('matchId');
   const navigate = useNavigate();
+  
   const userId = localStorage.getItem('userId');
+  const authToken = localStorage.getItem('authToken'); // Sécurité WebSocket
 
   const saveScore = async (pts) => {
     if (!userId || !jeuId) return;
     try { await scoreService.saveScore(parseInt(userId), parseInt(jeuId), pts); } catch(e) {}
   };
 
+  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
+  const handleMessageReceived = (message) => {
+    if (message.actionType === 'MOVE') {
+      const { position, role } = message.payload;
+      handleIncomingMove(position, role);
+    }
+  };
+
+  // Initialisation du Hook multijoueur
+  const { isConnected, sendSyncEvent } = useMultiplayerSync(
+    matchId,
+    userId,
+    authToken,
+    handleMessageReceived
+  );
+  // ------------------------------------------------------
+
   useEffect(() => {
     if (!userId || !matchId) return;
 
-    // 1. Déterminer le rôle du joueur (X ou O) via l'API Match
-    const currentHost = window.location.hostname;
-    fetch(`http://${currentHost}:8080/api/matches/${matchId}`)
-      .then(res => res.json())
-      .then(match => {
-        if (match.player1?.id.toString() === userId) {
-          setPlayerRole('X');
-        } else if (match.player2?.id.toString() === userId) {
-          setPlayerRole('O');
+    // 1. Déterminer le rôle du joueur (X ou O) via l'API Match avec notre service
+    const fetchMatchData = async () => {
+        try {
+            const res = await matchService.getMatch(matchId);
+            const match = res.data;
+            if (match.player1?.id.toString() === userId) {
+                setPlayerRole('X');
+            } else if (match.player2?.id.toString() === userId) {
+                setPlayerRole('O');
+            }
+        } catch (err) {
+            console.error("Erreur chargement rôles:", err);
         }
-      })
-      .catch(err => console.error("Erreur chargement rôles:", err));
+    };
 
-    // 2. Connexion aux WebSockets pour ce match spécifique
-    const socketUrl = `http://${currentHost}:8080/ws-arcade`;
-    const socket = new SockJS(socketUrl);
-    
-    const client = new Client({
-      webSocketFactory: () => socket,
-      onConnect: () => {
-        console.log(`🔌 Connecté au plateau du match ${matchId}`);
-        
-        // S'abonner aux mouvements du match
-        client.subscribe(`/topic/game/${matchId}`, (message) => {
-          const move = JSON.parse(message.body);
-          handleIncomingMove(move.position, move.role);
-        });
-      }
-    });
-
-    client.activate();
-    setStompClient(client);
-
-    return () => client.deactivate(); // Nettoyage en quittant la page
+    fetchMatchData();
+    // Le hook gère la connexion WebSocket tout seul !
   }, [userId, matchId]);
 
-  // Fonction appelée QUAND LE SERVEUR valide et renvoie un coup
+  // Fonction pour traiter un mouvement (le nôtre ou celui de l'adversaire)
   const handleIncomingMove = (position, role) => {
     setBoard(prev => {
       const newBoard = [...prev];
@@ -87,7 +87,7 @@ export default function TicTacToeGame() {
       
       const w = checkWinner(newBoard);
       if (w) {
-        // setTimeout pour s'assurer que l'état a bien le dernier rôle
+        // setTimeout pour s'assurer que l'état a bien le dernier rôle affiché
         setTimeout(() => endGame(w), 50); 
       } else {
         setCurrentPlayer(role === 'X' ? 'O' : 'X'); // Au tour de l'autre
@@ -97,20 +97,20 @@ export default function TicTacToeGame() {
     });
   };
 
-  // Fonction pour gérer la fin du jeu de manière personnalisée (Gagné/Perdu)
+  // Fonction pour gérer la fin du jeu
   const endGame = (w) => {
     setGameOver(true);
-    // On doit utiliser une fonction fléchée dans le setState pour avoir accès à l'état actuel de playerRole
     setPlayerRole(currentRole => {
         if (w === currentRole) { 
             setResult('🎉 Victoire ! +10 pts'); 
             saveScore(10); 
+            // On déclare le gagnant au backend
+            if (matchId) matchService.setMatchWinner(matchId, userId).catch(e => console.error(e));
         } else if (w === 'draw') { 
             setResult('🤝 Match nul ! +5 pts'); 
             saveScore(5); 
         } else { 
             setResult('💀 Défaite...'); 
-            // On ne donne pas de points au perdant
         }
         return currentRole;
     });
@@ -123,19 +123,17 @@ export default function TicTacToeGame() {
       return; 
     }
     
-    // Si c'est mon tour, j'envoie mon coup au serveur au lieu de modifier l'écran de suite
-    if (stompClient && stompClient.connected) {
-      const move = {
-        matchId: parseInt(matchId),
-        playerId: parseInt(userId),
+    if (isConnected) {
+      // 1. Jouer le coup localement pour un affichage immédiat
+      handleIncomingMove(i, playerRole);
+
+      // 2. Envoyer le coup à l'adversaire
+      sendSyncEvent('MOVE', {
         position: i,
         role: playerRole
-      };
-      
-      stompClient.publish({
-        destination: '/app/game.move',
-        body: JSON.stringify(move)
       });
+    } else {
+      console.warn("Attente de connexion réseau...");
     }
   };
 

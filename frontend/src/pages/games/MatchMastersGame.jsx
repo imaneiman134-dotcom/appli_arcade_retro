@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+// IMPORT DU HOOK MULTIJOUEUR
+import { useMultiplayerSync } from '../../hooks/useMultiplayerSync';
 import './match-masters.css';
 
 const width = 8;
@@ -27,10 +27,12 @@ const MatchMastersGame = () => {
   const [matchData, setMatchData] = useState(null);
   const [myRole, setMyRole] = useState(null);
   const [engineReady, setEngineReady] = useState(false); 
-  const [isMyTurnBlocked, setIsMyTurnBlocked] = useState(true); // contrôle l'overlay de manière réactive
+  const [isMyTurnBlocked, setIsMyTurnBlocked] = useState(true);
 
   const userId = localStorage.getItem('userId');
+  const authToken = localStorage.getItem('authToken'); // Sécurité WebSocket
 
+  // Refs pour le moteur de jeu synchronisé
   const boardRef = useRef(Array(64).fill(''));
   const p1HealthRef = useRef(200);
   const p2HealthRef = useRef(200);
@@ -39,14 +41,15 @@ const MatchMastersGame = () => {
   const gameOverRef = useRef(false);
   const isHostRef = useRef(false); 
   const myRoleRef = useRef(null);
-  const stompClientRef = useRef(null);
   
-  // CORRECTIF : phase d'init détectée par comptage de ticks stables consécutifs
-  // isInitRef = true tant que le plateau initial n'est pas totalement stable
   const isInitRef = useRef(true);
-  // Compteur de ticks consécutifs sans aucun changement ni match
   const stableTicksRef = useRef(0);
-  const STABLE_TICKS_NEEDED = 3; // 3 ticks × 150ms = 450ms de stabilité = init terminée
+  const STABLE_TICKS_NEEDED = 3;
+
+  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
+
+  // Ref pour appeler l'envoi d'événement sans casser les dépendances (évite les boucles infinies)
+  const sendSyncEventRef = useRef(null);
 
   const endGame = useCallback(async (winnerRole) => {
     if (gameOverRef.current) return;
@@ -65,26 +68,90 @@ const MatchMastersGame = () => {
   }, [jeuId, matchId, userId]);
 
   const sendSync = useCallback(() => {
-    if (!stompClientRef.current || !stompClientRef.current.connected) return;
+    if (!sendSyncEventRef.current) return;
     
-    const payload = JSON.stringify({
-        action: 'SYNC',
+    // On emballe les données proprement au lieu d'une chaîne stringifiée
+    const payload = {
         p1: p1HealthRef.current,
         p2: p2HealthRef.current,
         turn: currentTurnRef.current,
         board: boardRef.current.map(c => COLOR_MAP[c] || 'E').join('')
-    });
+    };
     
-    stompClientRef.current.publish({
-      destination: '/app/game.move',
-      body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: 0, role: payload })
-    });
+    sendSyncEventRef.current('SYNC', payload);
 
     setCurrentBoard([...boardRef.current]);
     setP1Health(p1HealthRef.current);
     setP2Health(p2HealthRef.current);
     setCurrentTurn(currentTurnRef.current);
-  }, [matchId, userId]);
+  }, []);
+
+  const handleMessageReceived = useCallback((message) => {
+    const { actionType, payload } = message;
+
+    if (isHostRef.current) {
+        // Le Hôte reçoit des demandes du Joueur 2
+        if (actionType === 'HELLO') {
+            if (!isInitRef.current) {
+                sendSync();
+            }
+        }
+        else if (actionType === 'SWAP') {
+            if (currentTurnRef.current === 'player2' && !isResolvingRef.current) {
+                const c1 = boardRef.current[payload.idx1];
+                const c2 = boardRef.current[payload.idx2];
+                boardRef.current[payload.idx1] = c2;
+                boardRef.current[payload.idx2] = c1;
+                isResolvingRef.current = true;
+                sendSync(); 
+            }
+        }
+    } else {
+        // Le Joueur 2 reçoit les mises à jour de l'Hôte
+        if (actionType === 'SYNC') {
+            p1HealthRef.current = payload.p1;
+            p2HealthRef.current = payload.p2;
+            currentTurnRef.current = payload.turn;
+
+            isResolvingRef.current = false;
+            setIsMyTurnBlocked(payload.turn !== myRoleRef.current);
+
+            setP1Health(payload.p1);
+            setP2Health(payload.p2);
+            setCurrentTurn(payload.turn);
+            
+            const newBoard = payload.board.split('').map(char => REVERSE_MAP[char]);
+            boardRef.current = newBoard;
+            setCurrentBoard(newBoard);
+            
+            if (payload.p1 <= 0 || payload.p2 <= 0) {
+                endGame(payload.p1 <= 0 ? 'player2' : 'player1');
+            }
+        }
+    }
+  }, [sendSync, endGame]);
+
+  // Initialisation du Hook !
+  const { isConnected, sendSyncEvent } = useMultiplayerSync(
+    matchId,
+    userId,
+    authToken,
+    handleMessageReceived
+  );
+
+  // Mise à jour de la référence pour le moteur
+  useEffect(() => {
+    sendSyncEventRef.current = sendSyncEvent;
+  }, [sendSyncEvent]);
+
+  // Envoi du HELLO du joueur 2 une fois connecté
+  useEffect(() => {
+      if (isConnected && myRoleRef.current === 'player2') {
+          sendSyncEvent('HELLO', {});
+      }
+  }, [isConnected, sendSyncEvent]);
+
+  // ------------------------------------------------------
 
   useEffect(() => {
     if (!matchId || !userId) return;
@@ -110,83 +177,14 @@ const MatchMastersGame = () => {
           setEngineReady(true); 
         }
 
-        const currentHost = window.location.hostname;
-        const socket = new SockJS(`http://${currentHost}:8080/ws-arcade`);
-        const client = new Client({
-          webSocketFactory: () => socket,
-          onConnect: () => {
-            client.subscribe(`/topic/game/${matchId}`, (message) => {
-              const move = JSON.parse(message.body);
-              if (move.playerId.toString() === userId) return; 
-
-              try {
-                  const data = JSON.parse(move.role);
-                  
-                  if (isHostRef.current) {
-                      if (data.action === 'HELLO') {
-                          // Si l'init est déjà terminée, on sync immédiatement.
-                          // Sinon, le moteur enverra le sync dès que le plateau sera stable.
-                          if (!isInitRef.current) {
-                              sendSync();
-                          }
-                      }
-                      else if (data.action === 'SWAP') {
-                          if (currentTurnRef.current === 'player2' && !isResolvingRef.current) {
-                              const c1 = boardRef.current[data.idx1];
-                              const c2 = boardRef.current[data.idx2];
-                              boardRef.current[data.idx1] = c2;
-                              boardRef.current[data.idx2] = c1;
-                              isResolvingRef.current = true;
-                              sendSync(); 
-                          }
-                      }
-                  } else {
-                      if (data.action === 'SYNC') {
-                          p1HealthRef.current = data.p1;
-                          p2HealthRef.current = data.p2;
-                          currentTurnRef.current = data.turn;
-
-                          // Player2 ne gère pas isResolvingRef : c'est le host qui résout.
-                          // On débloque l'overlay uniquement si c'est le tour de player2.
-                          isResolvingRef.current = false;
-                          setIsMyTurnBlocked(data.turn !== myRoleRef.current);
-
-                          setP1Health(data.p1);
-                          setP2Health(data.p2);
-                          setCurrentTurn(data.turn);
-                          
-                          const newBoard = data.board.split('').map(char => REVERSE_MAP[char]);
-                          boardRef.current = newBoard;
-                          setCurrentBoard(newBoard);
-                          
-                          if (data.p1 <= 0 || data.p2 <= 0) {
-                              endGame(data.p1 <= 0 ? 'player2' : 'player1');
-                          }
-                      }
-                  }
-              } catch(e) { console.error("Erreur lecture réseau", e); }
-            });
-
-            if (!host) {
-               client.publish({
-                 destination: '/app/game.move',
-                 body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: 0, role: JSON.stringify({ action: 'HELLO' }) })
-               });
-            }
-          }
-        });
-
-        client.activate();
-        stompClientRef.current = client;
-
+        // Le hook gère toute la connexion WebSocket (SockJS, Client, Subscribe...)
       } catch (err) { console.error("Erreur :", err); }
     };
 
     initGame();
-    return () => { if (stompClientRef.current) stompClientRef.current.deactivate(); };
-  }, [matchId, userId, sendSync, endGame]);
+  }, [matchId, userId]);
 
-  // LE MOTEUR DE JEU
+  // LE MOTEUR DE JEU (Tourne uniquement chez l'hôte)
   useEffect(() => {
     if (!engineReady || !isHostRef.current) return;
 
@@ -229,7 +227,6 @@ const MatchMastersGame = () => {
         if (moved) boardChanged = true;
 
         if (damageThisFrame > 0) {
-            // On applique les dégâts uniquement hors initialisation
             if (!isInitRef.current) {
                 if (currentTurnRef.current === 'player1') {
                     p2HealthRef.current = Math.max(0, p2HealthRef.current - damageThisFrame);
@@ -237,42 +234,33 @@ const MatchMastersGame = () => {
                     p1HealthRef.current = Math.max(0, p1HealthRef.current - damageThisFrame);
                 }
             }
-            // Un match a eu lieu : le plateau n'est pas encore stable
             stableTicksRef.current = 0;
             isResolvingRef.current = true; 
         }
 
         if (boardChanged) {
-            // Le plateau a bougé (gravité ou match) : réinitialiser le compteur de stabilité
             stableTicksRef.current = 0;
         } else {
-            // Tick sans changement : incrémenter le compteur
             stableTicksRef.current += 1;
         }
 
-        // --- Fin de phase d'INITIALISATION ---
-        // Le plateau est stable depuis assez longtemps : l'init est terminée
         if (isInitRef.current && stableTicksRef.current >= STABLE_TICKS_NEEDED) {
             isInitRef.current = false;
             isResolvingRef.current = false;
             stableTicksRef.current = 0;
-            // Le host joue en premier : débloquer son overlay
             setIsMyTurnBlocked(currentTurnRef.current !== myRoleRef.current);
-            sendSync(); // Sync final d'init : player2 reçoit le plateau stable et son tour
+            sendSync(); 
             return;
         }
 
-        // --- Fin de phase de RÉSOLUTION (coup normal) ---
-        // On ne traite la fin de résolution que si l'init est déjà terminée
         if (!isInitRef.current && isResolvingRef.current && !boardChanged) {
             isResolvingRef.current = false;
             currentTurnRef.current = currentTurnRef.current === 'player1' ? 'player2' : 'player1';
             setIsMyTurnBlocked(currentTurnRef.current !== myRoleRef.current);
-            sendSync(); // Sync de fin de résolution : communique le nouveau tour
+            sendSync(); 
             return;
         }
 
-        // Pendant la résolution (cascade, gravité) : sync pour que player2 voie les animations
         if (!isInitRef.current && boardChanged) {
             sendSync();
         }
@@ -289,8 +277,6 @@ const MatchMastersGame = () => {
   const handleSquareClick = (index) => {
     if (gameOverRef.current) return;
     if (currentTurnRef.current !== myRoleRef.current) return;
-    // Pour le host, on bloque pendant la résolution et l'init.
-    // Pour player2, la résolution est gérée par le host : on ne bloque que pendant l'init.
     if (isInitRef.current) return;
     if (isHostRef.current && isResolvingRef.current) return;
 
@@ -307,12 +293,9 @@ const MatchMastersGame = () => {
             isResolvingRef.current = true;
             sendSync();
         } else {
-            if (stompClientRef.current) {
-                stompClientRef.current.publish({
-                  destination: '/app/game.move',
-                  body: JSON.stringify({ matchId: parseInt(matchId), playerId: parseInt(userId), position: 0, role: JSON.stringify({ action: 'SWAP', idx1: selectedIndex, idx2: index }) })
-                });
-                // Bloquer immédiatement après envoi pour éviter un double-clic
+            if (isConnected) {
+                // Le joueur 2 envoie une demande de swap avec les index concernés
+                sendSyncEvent('SWAP', { idx1: selectedIndex, idx2: index });
                 setIsMyTurnBlocked(true);
             }
         }
@@ -373,7 +356,6 @@ const MatchMastersGame = () => {
       </div>
 
       {gameOver && (
-        /* CORRECTIF D'AFFICHAGE : position 'fixed' avec 100vw et 100vh garantit que la boîte couvre toujours l'écran entier */
         <div className="game-over-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <h2 style={{ fontSize: '40px', color: matchResult === 'victory' ? '#2ecc71' : '#e74c3c' }}>
             {matchResult === 'victory' ? '🏆 VICTOIRE !' : '💀 K.O.'}

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scoreService, matchService } from '../../services/api';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+import { useMultiplayerSync } from '../../hooks/useMultiplayerSync'; 
 import './connect4.css';
 
 const Connect4Game = () => {
@@ -20,17 +19,34 @@ const Connect4Game = () => {
   const [loading, setLoading] = useState(true);
   
   const [playerRole, setPlayerRole] = useState(null); 
-  const [stompClient, setStompClient] = useState(null);
 
   const userId = localStorage.getItem('userId');
+  const authToken = localStorage.getItem('authToken'); // Ajout pour le websocket sécurisé
   
-
   const lastMoveTime = useRef(0);
+
+  // --- NOUVEAU SYSTÈME DE SYNCHRONISATION MULTIJOUEUR ---
+  const handleMessageReceived = (message) => {
+    // On vérifie qu'il s'agit bien d'une action de type MOVE
+    if (message.actionType === 'MOVE') {
+      const { position, role } = message.payload;
+      handleIncomingMove(position, role);
+    }
+  };
+
+  // Initialisation du Hook de votre camarade
+  const { isConnected, sendSyncEvent } = useMultiplayerSync(
+    matchId,
+    userId,
+    authToken,
+    handleMessageReceived
+  );
+  // ------------------------------------------------------
 
   useEffect(() => {
     if (!matchId || !userId) return;
 
-    const fetchMatchDataAndConnect = async () => {
+    const fetchMatchData = async () => {
       try {
         const res = await matchService.getMatch(matchId);
         const match = res.data;
@@ -42,37 +58,15 @@ const Connect4Game = () => {
           setPlayerRole('yellow');
         }
 
-        const currentHost = window.location.hostname;
-        const socketUrl = `http://${currentHost}:8080/ws-arcade`;
-        const socket = new SockJS(socketUrl);
-        
-        const client = new Client({
-          webSocketFactory: () => socket,
-          onConnect: () => {
-            console.log(`Connecté au Puissance 4 (Match ${matchId})`);
-            
-            client.subscribe(`/topic/game/${matchId}`, (message) => {
-              const move = JSON.parse(message.body);
-              handleIncomingMove(move.position, move.role);
-            });
-          }
-        });
-
-        client.activate();
-        setStompClient(client);
         setLoading(false);
-
       } catch (err) {
         console.error('Erreur initialisation match:', err);
         setLoading(false);
       }
     };
 
-    fetchMatchDataAndConnect();
-
-    return () => {
-      if (stompClient) stompClient.deactivate();
-    };
+    fetchMatchData();
+    // Le hook useMultiplayerSync s'occupe déjà d'ouvrir et de fermer la connexion
   }, [matchId, userId]);
 
   const checkWinner = (currentBoard, row, col, player) => {
@@ -156,18 +150,17 @@ const Connect4Game = () => {
     if (gameOver || currentPlayer !== playerRole) return;
     if (board[0][col]) return; 
 
-    if (stompClient && stompClient.connected) {
-      const move = {
-        matchId: parseInt(matchId),
-        playerId: parseInt(userId),
+    if (isConnected) {
+      // 1. Jouer le coup localement pour voir le pion tomber tout de suite
+      handleIncomingMove(col, playerRole);
+
+      // 2. Envoyer l'action à l'adversaire
+      sendSyncEvent('MOVE', {
         position: col, 
         role: playerRole
-      };
-      
-      stompClient.publish({
-        destination: '/app/game.move',
-        body: JSON.stringify(move)
       });
+    } else {
+      console.warn("En attente de connexion réseau...");
     }
   };
 
@@ -209,7 +202,6 @@ const Connect4Game = () => {
         </div>
       </div>
 
-      {/* RETOUR DU CODE HTML/CSS EXACT D'ORIGINE POUR LE PLATEAU */}
       <div className="connect4-board">
         {Array(7).fill(null).map((_, col) => (
           <div key={col} className="connect4-column" onClick={() => handleColumnClick(col)}>

@@ -1,10 +1,12 @@
 import axios from 'axios';
 
-// 1. On déclare la variable ici
 const currentHost = window.location.hostname;
+const defaultApiBase = `http://${currentHost}:8080/api`;
+const defaultWsBase = `http://${currentHost}:8080`;
 
-// 2. On l'utilise juste en dessous
-const API_BASE_URL = `http://${currentHost}:8080/api`;
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || defaultApiBase;
+export const WS_BASE_URL = process.env.REACT_APP_WS_BASE_URL || defaultWsBase;
+export const WS_ENDPOINT = `${WS_BASE_URL}/ws-arcade`;
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -82,9 +84,12 @@ export const invitationService = {
 export const matchService = {
   getMatch: (matchId) => 
     apiClient.get(`/matches/${matchId}`),
+
+  getConnect4State: (matchId) =>
+    apiClient.get(`/matches/${matchId}/connect4/state`),
   
   updateMatchStatus: (matchId, status) => 
-    apiClient.put(`/matches/${matchId}/status`, { status }),
+    apiClient.put(`/matches/${matchId}/status?status=${status}`),
   
   setMatchWinner: (matchId, winnerId) => 
     apiClient.post(`/matches/${matchId}/winner?winnerId=${winnerId}`),
